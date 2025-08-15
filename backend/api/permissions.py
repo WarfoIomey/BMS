@@ -11,7 +11,6 @@ class IsAdmin(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        ""
         return (
             request.user.is_authenticated and request.user.is_admin
         )
@@ -26,6 +25,8 @@ class IsManagerOrAdmin(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
+        if request.method in permissions.SAFE_METHODS:
+            return True
         if request.method == 'PUT':
             if obj.author == request.user:
                 return True

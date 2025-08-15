@@ -97,6 +97,20 @@ class TeamSerializer(serializers.ModelSerializer):
         )
 
 
+class TeamAddParticipantSerializer(serializers.Serializer):
+    user_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        write_only=True
+    )
+
+
+class TeamRemoveParticipantSerializer(serializers.Serializer):
+    user_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        write_only=True
+    )
+
+
 class TaskSerializers(serializers.ModelSerializer):
     """Сериализатор для задач."""
 

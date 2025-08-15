@@ -12,6 +12,8 @@ from api.serializers import (
     UserRegistrationSerializer,
     PasswordChangeSerializer,
     TeamSerializer,
+    TeamAddParticipantSerializer,
+    TeamRemoveParticipantSerializer,
     TaskSerializers,
     TaskStatusUpdateSerializers,
 )
@@ -64,7 +66,51 @@ class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
     serializer_class = TeamSerializer
-    # permission_classes=[IsAdmin],
+    permission_classes = [IsAdmin,]
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    def update(self, request, *args, **kwargs):
+        return Response(
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    @action(detail=True, methods=['put'], url_path='add-participant')
+    def add_participant(self, request, pk=None):
+        team = self.get_object()
+        serializer = TeamAddParticipantSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user_id']
+        if team.participants.filter(id=user.id).exists():
+            return Response(
+                {'error': f'Пользователь {user.username} уже в команде'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        team.participants.add(user)
+        return Response(
+            {'status': f'Пользователь {user.username} добавлен в команду'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['delete'], url_path='remove-participant')
+    def remove_participant(self, request, pk=None):
+        team = self.get_object()
+        serializer = TeamRemoveParticipantSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user_id']
+        if not team.participants.filter(id=user.id).exists():
+            return Response(
+                {'error': f'Пользователя {user.username} нет в команде'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        team.participants.remove(user)
+        return Response(
+            {'status': f'Пользователь {user.username} удален из команды'},
+            status=status.HTTP_200_OK
+        )
 
 
 class TaskViewSet(viewsets.ModelViewSet):
