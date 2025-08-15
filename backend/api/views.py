@@ -7,8 +7,11 @@ from rest_framework.response import Response
 from api.serializers import (
     UserSerializer,
     UserRegistrationSerializer,
-    PasswordChangeSerializer
+    PasswordChangeSerializer,
+    TeamSerializer
 )
+from teamflow.models import Team
+from .permissions import IsAdmin
 
 
 User = get_user_model()
@@ -48,3 +51,12 @@ class UserViewSet(viewsets.ModelViewSet):
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TeamViewSet(viewsets.ModelViewSet):
+    """Вьюсет для работы с командами."""
+
+    queryset = Team.objects.all()
+    http_method_names = ['get', 'post', 'put', 'delete']
+    serializer_class = TeamSerializer
+    # permission_classes=[IsAdmin],

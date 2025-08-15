@@ -9,7 +9,7 @@ class UserRole(models.TextChoices):
 
     USER = 'user'
     MANAGER = 'manager'
-    ADMIN = 'admin'
+    ADMIN_TEAM = 'admin'
 
 
 class User(AbstractUser):

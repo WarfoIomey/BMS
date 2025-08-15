@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from teamflow.models import Team
 
 
 User = get_user_model()
@@ -68,3 +69,19 @@ class PasswordChangeSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Текущий пароль неверный")
         return value
+
+
+class TeamSerializer(serializers.ModelSerializer):
+
+    team = UserSerializer(
+        many=True,
+        allow_empty=False
+    )
+
+    class Meta:
+        model = Team
+        fields = (
+            'id',
+            'title',
+            'team'
+        )
