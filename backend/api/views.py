@@ -8,10 +8,12 @@ from api.serializers import (
     UserSerializer,
     UserRegistrationSerializer,
     PasswordChangeSerializer,
-    TeamSerializer
+    TeamSerializer,
+    TaskSerializers,
+    TaskStatusUpdateSerializers,
 )
-from teamflow.models import Team
-from .permissions import IsAdmin
+from teamflow.models import Team, Task
+from .permissions import IsAdmin, IsManagerOrAdmin
 
 
 User = get_user_model()
@@ -60,3 +62,33 @@ class TeamViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'put', 'delete']
     serializer_class = TeamSerializer
     # permission_classes=[IsAdmin],
+
+
+class TaskViewSet(viewsets.ModelViewSet):
+    """Вьюсет для работы с задачами."""
+
+    queryset = Task.objects.all()
+    http_method_names = ['get', 'post', 'put', 'delete']
+    permission_classes = [IsManagerOrAdmin, IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'update':
+            return TaskStatusUpdateSerializers
+        return TaskSerializers
+
+    def get_queryset(self):
+        '''Получение задач, только своей команды.'''
+        user = self.request.user
+        if user.is_superuser:
+            return super().get_queryset()
+        return Task.objects.filter(
+            team__participants=user
+        ).select_related('executor', 'team')
+
+    @action(detail=True, methods=['put'])
+    def update_status(self, request, pk=None):
+        task = self.get_object()
+        serializer = self.get_serializer(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)

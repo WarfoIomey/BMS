@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from teamflow.models import Team
+from teamflow.models import Team, Task, StatusTask
 
 
 User = get_user_model()
@@ -19,8 +19,12 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'first_name',
             'last_name',
-            'bio'
+            'bio',
+            'role'
         )
+        extra_kwargs = {
+            'role': {'read_only': True},
+        }
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -73,7 +77,7 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class TeamSerializer(serializers.ModelSerializer):
 
-    team = UserSerializer(
+    participants = UserSerializer(
         many=True,
         allow_empty=False
     )
@@ -83,5 +87,67 @@ class TeamSerializer(serializers.ModelSerializer):
         fields = (
             'id',
             'title',
+            'participants'
+        )
+
+
+class TaskSerializers(serializers.ModelSerializer):
+    """Сериализатор для задач."""
+
+    status = serializers.ChoiceField(choices=StatusTask.choices)
+    executor_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source='executor',
+        write_only=True
+    )
+    author = UserSerializer(read_only=True)
+    executor = UserSerializer(read_only=True)
+    team = TeamSerializer(read_only=True)
+
+    class Meta:
+        model = Task
+        fields = (
+            'id',
+            'author',
+            'title',
+            'description',
+            'deadline',
+            'executor_id',
+            'status',
+            'executor',
             'team'
         )
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        team = user.teams.first()
+        if not team:
+            raise serializers.ValidationError(
+                "Пользователь не состоит в команде"
+            )
+        executor = validated_data.get('executor')
+        if executor and not team.participants.filter(id=executor.id).exists():
+            raise serializers.ValidationError({
+                "executor_id": "Исполнитель не состоит в вашей команде"
+            })
+        validated_data.update({
+            'author': user,
+            'team': team
+        })
+        return super().create(validated_data)
+
+
+class TaskStatusUpdateSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['status']
+
+    def validate_status(self, value):
+        user = self.context['request'].user
+        current_status = self.instance.status
+        if user.is_user:
+            if value != 'progress' or current_status != 'open':
+                raise serializers.ValidationError(
+                    "Вы можете менять статус только с open на progress"
+                )
+        return value

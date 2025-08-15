@@ -9,7 +9,7 @@ class UserRole(models.TextChoices):
 
     USER = 'user'
     MANAGER = 'manager'
-    ADMIN_TEAM = 'admin'
+    ADMIN_TEAM = 'admin_team'
 
 
 class User(AbstractUser):
@@ -68,11 +68,16 @@ class User(AbstractUser):
         return self.username
 
     @property
+    def is_user(self):
+        """Проверка на обычного участника команды."""
+        return self.role == UserRole.USER
+
+    @property
     def is_admin(self):
-        """Проверка на админа."""
-        return self.role == UserRole.ADMIN or self.is_superuser
+        """Проверка на админастратора команды."""
+        return self.role == UserRole.ADMIN_TEAM or self.is_superuser
 
     @property
     def is_manager(self):
-        """Проверка на менеджера."""
+        """Проверка на менеджера команды."""
         return self.role == UserRole.MANAGER

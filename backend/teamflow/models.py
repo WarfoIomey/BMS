@@ -22,9 +22,10 @@ class Team(models.Model):
         verbose_name='Название команды',
         help_text='Введите название команды'
     )
-    team = models.ManyToManyField(
+    participants = models.ManyToManyField(
         User,
         verbose_name='Участники команды',
+        related_name='teams',
         help_text='Выберите участников для команды',
     )
 
@@ -38,6 +39,13 @@ class Team(models.Model):
 
 
 class Task(models.Model):
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        help_text='Укажите автора',
+        verbose_name='Автор',
+        related_name='authored_tasks'
+    )
     title = models.CharField(
         max_length=constants.MAX_LENGTH_NAME_TASK,
         verbose_name='Название Задачи',
@@ -57,18 +65,18 @@ class Task(models.Model):
         choices=StatusTask.choices,
         default=StatusTask.OPEN
     )
-    user = models.ForeignKey(
+    executor = models.ForeignKey(
         User,
         help_text='Укажите исполнителя',
         on_delete=models.CASCADE,
-        related_name='users',
+        related_name='assigned_tasks',
         verbose_name='Исполнитель',
     )
     team = models.ForeignKey(
         Team,
         help_text='Укажите команду',
         on_delete=models.CASCADE,
-        related_name='teams',
+        related_name='tasks',
         verbose_name='Команда',
     )
 
