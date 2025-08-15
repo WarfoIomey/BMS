@@ -1,8 +1,14 @@
+from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from teamflow.models import Team, Task, StatusTask
+from teamflow.models import (
+    Comment,
+    Team,
+    Task,
+    StatusTask
+)
 
 
 User = get_user_model()
@@ -151,3 +157,53 @@ class TaskStatusUpdateSerializers(serializers.ModelSerializer):
                     "Вы можете менять статус только с open на progress"
                 )
         return value
+
+
+class CommentTaskCreateSerializers(serializers.ModelSerializer):
+    """Сериализатор для комментариев."""
+    class Meta:
+        model = Comment
+        fields = ('text',)
+        extra_kwargs = {
+            'text': {
+                'required': True,
+                'allow_blank': False,
+                'error_messages': {
+                    'blank': 'Комментарий не может быть пустым'
+                }
+            }
+        }
+
+    def validate(self, attrs):
+        task_id = self.context['view'].kwargs['task_pk']
+        user = self.context['request'].user
+        attrs['task'] = get_object_or_404(
+            Task.objects.filter(
+                id=task_id,
+                team__participants=user
+            )
+        )
+        return attrs
+
+    def create(self, validated_data):
+        return Comment.objects.create(
+            text=validated_data['text'],
+            author=self.context['request'].user,
+            task=validated_data['task']
+        )
+
+
+class CommentTaskReadSerializers(serializers.ModelSerializer):
+    author = UserSerializer()
+    task = TaskSerializers()
+
+    class Meta:
+        model = Comment
+        fields = (
+            'id',
+            'author',
+            'text',
+            'task',
+            'created_at',
+        )
+        read_only_fields = fields

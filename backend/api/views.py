@@ -1,10 +1,13 @@
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.serializers import (
+    CommentTaskCreateSerializers,
+    CommentTaskReadSerializers,
     UserSerializer,
     UserRegistrationSerializer,
     PasswordChangeSerializer,
@@ -12,7 +15,7 @@ from api.serializers import (
     TaskSerializers,
     TaskStatusUpdateSerializers,
 )
-from teamflow.models import Team, Task
+from teamflow.models import Comment, Team, Task
 from .permissions import IsAdmin, IsManagerOrAdmin
 
 
@@ -92,3 +95,21 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method in ['POST']:
+            return CommentTaskCreateSerializers
+        return CommentTaskReadSerializers
+
+    def get_queryset(self):
+        task = get_object_or_404(
+            Task.objects.filter(
+                id=self.kwargs['task_pk'],
+                team__participants=self.request.user
+            )
+        )
+        return task.comments.select_related('author').order_by('-created_at')

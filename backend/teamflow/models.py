@@ -113,3 +113,36 @@ class Evaluation(models.Model):
 
     def __str__(self):
         return f'{self.task.team.title} - {self.task.title}'
+
+
+class Comment(models.Model):
+    text = models.TextField(
+        help_text='Текст комментария',
+        verbose_name='Текст'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        verbose_name='Задача',
+        help_text='Комментарий задачи',
+        null=True,
+        related_name='comments'
+    )
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Автор комментария',
+        help_text='Автор комментария',
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text='Время создания комментария',
+        verbose_name='Добавлено'
+    )
+
+    class Meta:
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
+
+    def __str__(self):
+        return f'{self.author.username} - {self.text}'

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Team, Task, Evaluation
+from .models import Comment, Team, Task, Evaluation
 
 
 @admin.register(Team)
@@ -34,4 +34,17 @@ class EvaluationAdmin(admin.ModelAdmin):
         'id',
         'task',
         'rating',
+    )
+
+
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    """Настройка админки для модели Comment."""
+
+    list_display = (
+        'id',
+        'author',
+        'task',
+        'created_at',
+        'text'
     )
