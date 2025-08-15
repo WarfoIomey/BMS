@@ -10,13 +10,15 @@ class UserAdmin(admin.ModelAdmin):
     """Настройка админки для модели User."""
 
     list_display = (
-        'pk',
+        'id',
         'username',
         'email',
         'first_name',
         'last_name',
-        'avatar'
+        'bio',
+        'role'
     )
-    search_fields = ('username',)
+    search_fields = ('username', 'role')
     list_filter = ('username',)
+    list_editable = ('role',)
     empty_value_display = '-пусто-'
