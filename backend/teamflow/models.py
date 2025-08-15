@@ -97,6 +97,13 @@ class Evaluation(models.Model):
         related_name='tasks',
         verbose_name='задача',
     )
+    evaluator = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        help_text='Укажите кто оценил задачу',
+        related_name='evaluations_given',
+        verbose_name='Автор оценки'
+    )
     rating = models.IntegerField(
         validators=[
             MinValueValidator(constants.MIN_RATING),
@@ -105,8 +112,10 @@ class Evaluation(models.Model):
         help_text="Оценка от 1 до 5",
         verbose_name='Оценка',
     )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        unique_together = [['task', 'evaluator']]
         ordering = ['-id']
         verbose_name = 'Оценка'
         verbose_name_plural = 'Оценки'

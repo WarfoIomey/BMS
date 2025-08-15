@@ -3,8 +3,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from teamflow.constants import (
+    MIN_RATING,
+    MAX_RATING
+)
 from teamflow.models import (
     Comment,
+    Evaluation,
     Team,
     Task,
     StatusTask
@@ -220,4 +225,38 @@ class CommentTaskReadSerializers(serializers.ModelSerializer):
             'task',
             'created_at',
         )
+        read_only_fields = fields
+
+
+class EvaluationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Evaluation
+        fields = ['rating']
+        extra_kwargs = {
+            'rating': {
+                'min_value': MIN_RATING,
+                'max_value': MAX_RATING
+            }
+        }
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        task = self.context.get('task')
+        if task.executor == request.user:
+            raise serializers.ValidationError(
+                "Нельзя оценивать свою задачу"
+            )
+        if Evaluation.objects.filter(task=task, evaluator=request.user).exists():
+            raise serializers.ValidationError(
+                "Вы уже оценивали эту задачу"
+            )
+        return attrs
+
+
+class EvaluationReadSerializer(serializers.ModelSerializer):
+    evaluator = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Evaluation
+        fields = ['id', 'evaluator', 'rating', 'created_at']
         read_only_fields = fields

@@ -32,3 +32,6 @@ class IsManagerOrAdmin(permissions.BasePermission):
                 return True
             if user.is_authenticated and user.is_user:
                 return obj.executor == request.user
+        if request.method == 'POST':
+            if obj.author == request.user:
+                return True

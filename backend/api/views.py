@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Avg, Count
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -16,8 +17,10 @@ from api.serializers import (
     TeamRemoveParticipantSerializer,
     TaskSerializers,
     TaskStatusUpdateSerializers,
+    EvaluationCreateSerializer,
+    EvaluationReadSerializer
 )
-from teamflow.models import Comment, Team, Task
+from teamflow.models import Comment, Team, Task, Evaluation
 from .permissions import IsAdmin, IsManagerOrAdmin
 
 
@@ -141,6 +144,55 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='evaluate',
+    )
+    def evaluate_task(self, request, pk=None):
+        task = self.get_object()
+        serializer = EvaluationCreateSerializer(
+            data=request.data,
+            context={
+                'request': request,
+                'task': task
+            }
+        )
+        serializer.is_valid(raise_exception=True)
+        evaluation = Evaluation.objects.create(
+            task=task,
+            evaluator=request.user,
+            rating=serializer.validated_data['rating']
+        )
+        return Response(
+            EvaluationReadSerializer(evaluation).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='executor-evaluations',
+        permission_classes=[IsAuthenticated]
+    )
+    def executor_evaluations(self, request):
+        """Получение всех оценок задач, где пользователь является исполнителем."""
+        evaluations = Evaluation.objects.filter(
+            task__executor=request.user
+        ).select_related('task', 'evaluator', 'task__team')
+        stats = evaluations.aggregate(
+            average_rating=Avg('rating'),
+            total_evaluations=Count('id')
+        )
+        serializer = EvaluationReadSerializer(evaluations, many=True)
+        return Response(
+            {
+                'average_rating': round(stats['average_rating'], 2),
+                'total_evaluations': stats['total_evaluations'],
+                'evaluations': serializer.data
+            }
+        )
 
 
 class CommentViewSet(viewsets.ModelViewSet):
