@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -17,10 +17,11 @@ from api.serializers import (
     TeamRemoveParticipantSerializer,
     TaskSerializers,
     TaskStatusUpdateSerializers,
-    EvaluationCreateSerializer,
-    EvaluationReadSerializer
+    EvaluationCreateSerializers,
+    EvaluationReadSerializers,
+    MeetingSerializers
 )
-from teamflow.models import Comment, Team, Task, Evaluation
+from teamflow.models import Comment, Meeting, Team, Task, Evaluation
 from .permissions import IsAdmin, IsManagerOrAdmin
 
 
@@ -152,7 +153,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     )
     def evaluate_task(self, request, pk=None):
         task = self.get_object()
-        serializer = EvaluationCreateSerializer(
+        serializer = EvaluationCreateSerializers(
             data=request.data,
             context={
                 'request': request,
@@ -166,7 +167,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             rating=serializer.validated_data['rating']
         )
         return Response(
-            EvaluationReadSerializer(evaluation).data,
+            EvaluationReadSerializers(evaluation).data,
             status=status.HTTP_201_CREATED
         )
 
@@ -185,7 +186,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             average_rating=Avg('rating'),
             total_evaluations=Count('id')
         )
-        serializer = EvaluationReadSerializer(evaluations, many=True)
+        serializer = EvaluationReadSerializers(evaluations, many=True)
         return Response(
             {
                 'average_rating': round(stats['average_rating'], 2),
@@ -203,11 +204,22 @@ class CommentViewSet(viewsets.ModelViewSet):
             return CommentTaskCreateSerializers
         return CommentTaskReadSerializers
 
-    def get_queryset(self):
-        task = get_object_or_404(
+    def get_queryset(self) -> QuerySet[Comment]:
+        task: Task = get_object_or_404(
             Task.objects.filter(
                 id=self.kwargs['task_pk'],
                 team__participants=self.request.user
             )
         )
         return task.comments.select_related('author').order_by('-created_at')
+
+
+class MeetingViewSet(viewsets.ModelViewSet):
+    serializer_class = MeetingSerializers
+    permission_classes = [IsManagerOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Meeting.objects.filter(
+            Q(participants=user) | Q(organizer=user)
+        ).distinct()

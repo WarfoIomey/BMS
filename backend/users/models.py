@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import validate_email
 from django.db import models
 
 import users.constants as constants
@@ -29,6 +30,7 @@ class User(AbstractUser):
         max_length=constants.EMAIL_MAX_LENGTH,
         verbose_name='Электронная почта',
         unique=True,
+        validators=[validate_email],
         help_text='Укажите адрес электронной почты',
         error_messages={
             'unique': 'Пользователь с такой электронной почтой уже существует.'

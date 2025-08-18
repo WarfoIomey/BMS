@@ -1,6 +1,9 @@
+from datetime import datetime, timedelta
+
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 
 import teamflow.constants as constants
 
@@ -155,3 +158,50 @@ class Comment(models.Model):
 
     def __str__(self):
         return f'{self.author.username} - {self.text}'
+
+
+class Meeting(models.Model):
+    organizer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Организатор встречи ',
+        related_name='organized_meetings',
+        help_text='Пользователь создавший встречу',
+    )
+    date = models.DateField(
+        help_text='Укажите дату встречи',
+        verbose_name='Дата'
+    )
+    time = models.TimeField(
+        help_text='Укажите время встречи',
+        verbose_name='Время'
+    )
+    duration = models.IntegerField(
+        help_text='Укажите длительность встречи (мин.)',
+        verbose_name='Длительность',
+        validators=[
+            MinValueValidator(constants.MIN_DURATION),
+            MaxValueValidator(constants.MAX_DURATION)
+        ],
+    )
+    participants = models.ManyToManyField(
+        User,
+        verbose_name='Участники встречи',
+        related_name='meetings',
+        help_text='Выберите участников для встречи',
+    )
+
+    class Meta:
+        verbose_name = 'Встреча'
+        verbose_name_plural = 'Встречи'
+
+    def __str__(self):
+        return f'{self.date} - {self.time} - {self.duration}'
+
+    def get_start_datetime(self):
+        """Возвращает datetime начала встречи."""
+        return datetime.combine(self.date, self.time)
+
+    def get_end_datetime(self):
+        """Возвращает datetime окончания встречи"""
+        return self.get_start_datetime() + timedelta(minutes=self.duration)

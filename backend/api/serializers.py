@@ -1,3 +1,5 @@
+from datetime import datetime,  timedelta
+
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -12,7 +14,8 @@ from teamflow.models import (
     Evaluation,
     Team,
     Task,
-    StatusTask
+    StatusTask,
+    Meeting
 )
 
 
@@ -21,6 +24,7 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователей."""
+    email = serializers.EmailField()
 
     class Meta:
         model = User
@@ -36,6 +40,12 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'role': {'read_only': True},
         }
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Email уже занят")
+        return value
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -171,7 +181,10 @@ class TaskStatusUpdateSerializers(serializers.ModelSerializer):
         user = self.context['request'].user
         current_status = self.instance.status
         if user.is_user:
-            if value != 'progress' or current_status != 'open':
+            if (
+                value != StatusTask.PROGRESS or
+                current_status != StatusTask.OPEN
+            ):
                 raise serializers.ValidationError(
                     "Вы можете менять статус только с open на progress"
                 )
@@ -228,10 +241,10 @@ class CommentTaskReadSerializers(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class EvaluationCreateSerializer(serializers.ModelSerializer):
+class EvaluationCreateSerializers(serializers.ModelSerializer):
     class Meta:
         model = Evaluation
-        fields = ['rating']
+        fields = ('rating')
         extra_kwargs = {
             'rating': {
                 'min_value': MIN_RATING,
@@ -240,23 +253,110 @@ class EvaluationCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        request = self.context.get('request')
-        task = self.context.get('task')
+        request = self.context['request']
+        task = self.context['task']
         if task.executor == request.user:
             raise serializers.ValidationError(
                 "Нельзя оценивать свою задачу"
             )
-        if Evaluation.objects.filter(task=task, evaluator=request.user).exists():
+        if Evaluation.objects.filter(
+            task=task,
+            evaluator=request.user
+        ).exists():
             raise serializers.ValidationError(
                 "Вы уже оценивали эту задачу"
             )
         return attrs
 
 
-class EvaluationReadSerializer(serializers.ModelSerializer):
+class EvaluationReadSerializers(serializers.ModelSerializer):
     evaluator = UserSerializer(read_only=True)
 
     class Meta:
         model = Evaluation
-        fields = ['id', 'evaluator', 'rating', 'created_at']
+        fields = (
+            'id',
+            'evaluator',
+            'rating',
+            'created_at'
+        )
         read_only_fields = fields
+
+
+class MeetingSerializers(serializers.ModelSerializer):
+
+    participants = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=User.objects.all(),
+        allow_empty=False,
+        required=True
+    )
+
+    class Meta:
+        model = Meeting
+        fields = (
+            'id',
+            'organizer',
+            'date',
+            'time',
+            'duration',
+            'participants'
+        )
+        read_only_fields = ['organizer']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            self.fields['participants'].queryset = User.objects.filter(
+                teams__in=request.user.teams.all()
+            )
+
+    def create(self, validated_date):
+        validated_date.update({
+            'organizer': self.context['request'].user,
+        })
+        return super().create(validated_date)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        date = attrs['date']
+        time = attrs['time']
+        duration = attrs['duration']
+        participants = list(attrs['participants'])
+        participants.append(user)
+        attrs['participants'] = participants
+        allowed_user = User.objects.filter(
+            teams__in=user.teams.all()
+        ).distinct()
+        for participant in participants:
+            if participant not in allowed_user:
+                raise serializers.ValidationError(
+                    {
+                        "detail": "Пользователь не входит в команду"
+                    }
+                )
+        start = datetime.combine(date, time)
+        end = start + timedelta(minutes=duration)
+        instance = getattr(self, 'instance', None)
+        for participant in participants:
+            overlapping_meetings = Meeting.objects.filter(
+                participants=participant,
+                date=date
+            )
+            if instance:
+                overlapping_meetings = overlapping_meetings.exclude(
+                    id=instance.id
+                )
+
+            for meeting in overlapping_meetings:
+                other_start = meeting.get_start_datetime()
+                other_end = meeting.get_end_datetime()
+                if (start < other_end) and (end > other_start):
+                    raise serializers.ValidationError({
+                        'participant': participant.username,
+                        'conflict_start': other_start.time(),
+                        'conflict_end': other_end.time(),
+                        'detail': 'Встреча пересекается с другой'
+                    })
+        return attrs

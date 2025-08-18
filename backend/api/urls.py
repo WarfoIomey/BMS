@@ -5,7 +5,8 @@ from api.views import (
     CommentViewSet,
     UserViewSet,
     TeamViewSet,
-    TaskViewSet
+    TaskViewSet,
+    MeetingViewSet
 )
 
 
@@ -13,6 +14,7 @@ router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='users')
 router.register(r'teams', TeamViewSet, basename='teams')
 router.register(r'tasks', TaskViewSet, basename='tasks')
+router.register(r'meetings', MeetingViewSet, basename='meetings')
 comment_urls = [
     path(
         'tasks/<int:task_pk>/comments/',
