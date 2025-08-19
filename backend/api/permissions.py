@@ -3,17 +3,19 @@ from rest_framework import permissions
 
 class IsAdmin(permissions.BasePermission):
     """
-    Разрешение для проверки прав доступа к объектам.
-
-    Разрешает:
-    - Небезопасные операции только для аутентифицированных пользователей с
-    правами администратора.
+    Доступ:
+    - GET (и другие SAFE методы) → любой аутентифицированный пользователь.
+    - POST/PUT/DELETE → только админ команды (role=admin_team или superuser).
     """
 
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and request.user.is_admin
-        )
+        if not request.user.is_authenticated:
+            return False
+
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        return request.user.is_admin
 
 
 class IsManagerOrAdmin(permissions.BasePermission):

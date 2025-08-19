@@ -17,6 +17,7 @@ from teamflow.models import (
     StatusTask,
     Meeting
 )
+from users.models import UserRole
 
 
 User = get_user_model()
@@ -24,7 +25,6 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователей."""
-    email = serializers.EmailField()
 
     class Meta:
         model = User
@@ -37,15 +37,7 @@ class UserSerializer(serializers.ModelSerializer):
             'bio',
             'role'
         )
-        extra_kwargs = {
-            'role': {'read_only': True},
-        }
-
-    def validate_email(self, value):
-        value = value.lower().strip()
-        if User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("Email уже занят")
-        return value
+        read_only_fields = fields
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -62,15 +54,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'id',
             'email',
             'username',
-            'first_name',
-            'last_name',
-            'bio',
             'password'
         )
         extra_kwargs = {
             'email': {'required': True, 'allow_blank': False},
-            'first_name': {'required': True, 'allow_blank': False},
-            'last_name': {'required': True, 'allow_blank': False}
+            'username': {'required': True, 'allow_blank': False},
         }
 
     def create(self, validated_data):
@@ -79,6 +67,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Email уже занят")
+        return value
 
 
 class PasswordChangeSerializer(serializers.Serializer):
@@ -360,3 +354,40 @@ class MeetingSerializers(serializers.ModelSerializer):
                         'detail': 'Встреча пересекается с другой'
                     })
         return attrs
+
+
+class ChangeRoleSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(required=True)
+    role = serializers.ChoiceField(
+        choices=[UserRole.MANAGER, UserRole.USER],
+        required=True
+    )
+
+    def validate_user_id(self, value):
+        request = self.context['request']
+        team = self.context['team']
+        try:
+            user = User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Пользователь не найден")
+        if not team.participants.filter(id=value).exists():
+            raise serializers.ValidationError(
+                "Пользователь не состоит в вашей команде"
+            )
+        if value == request.user.id:
+            raise serializers.ValidationError(
+                "Вы не можете изменить свою собственную роль"
+            )
+        return user
+
+    def validate(self, data):
+        """
+        Проверка, что у пользователя еще не установлена эта роль.
+        """
+        user = data['user_id']
+        new_role = data['role']
+        if user.role == new_role:
+            raise serializers.ValidationError(
+                {"role": f"У пользователя уже установлена роль {new_role}"}
+            )
+        return data

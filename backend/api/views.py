@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from api.serializers import (
     CommentTaskCreateSerializers,
     CommentTaskReadSerializers,
+    ChangeRoleSerializer,
     UserSerializer,
     UserRegistrationSerializer,
     PasswordChangeSerializer,
@@ -80,6 +81,27 @@ class TeamViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return Response(
             status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    @action(detail=True, methods=['put'], url_path='change-role')
+    def change_role(self, request, pk=None):
+        team = self.get_object()
+        serializer = ChangeRoleSerializer(
+            data=request.data,
+            context={'team': team, 'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user_id']
+        new_role = serializer.validated_data['role']
+        user.role = new_role
+        user.save()
+        return Response(
+            {
+                'message': f'Роль {user.username} изменена на {new_role}',
+                'user_id': user.id,
+                'new_role': new_role
+            },
+            status=status.HTTP_200_OK
         )
 
     @action(detail=True, methods=['put'], url_path='add-participant')
