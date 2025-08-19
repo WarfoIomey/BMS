@@ -5,6 +5,9 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import TeamDashboard from "./pages/TeamDashboard";
+import TaskPage from "./pages/TaskPage";
+// import TaskForm from "./pages/TaskForm";
+// import TaskDetail from "./pages/TaskDetail";
 
 function Layout({ children }) {
   return (
@@ -71,10 +74,19 @@ export default function App() {
               <TeamDashboard />
             </PrivateRoute>
           } />
+          <Route path="/tasks" element={
+            <PrivateRoute>
+              <TaskPage />
+            </PrivateRoute>
+          } />
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
+      {/* <Route path="/tasks" element={<PrivateRoute><TaskPage /></PrivateRoute>} />
+      <Route path="/tasks/create" element={<PrivateRoute><TaskForm /></PrivateRoute>} />
+      <Route path="/tasks/:id" element={<PrivateRoute><TaskDetail /></PrivateRoute>} />
+      <Route path="/tasks/:id/edit" element={<PrivateRoute><TaskForm /></PrivateRoute>} /> */}
     </AuthProvider>
   );
 }

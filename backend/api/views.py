@@ -10,6 +10,7 @@ from api.serializers import (
     CommentTaskCreateSerializers,
     CommentTaskReadSerializers,
     ChangeRoleSerializer,
+    TeamCreateSerializers,
     UserSerializer,
     UserRegistrationSerializer,
     PasswordChangeSerializer,
@@ -70,8 +71,13 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     queryset = Team.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
-    serializer_class = TeamSerializer
+    # serializer_class = TeamSerializer
     permission_classes = [IsAdmin,]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TeamCreateSerializers
+        return TeamSerializer
 
     def destroy(self, request, *args, **kwargs):
         return Response(
@@ -152,13 +158,13 @@ class TaskViewSet(viewsets.ModelViewSet):
         return TaskSerializers
 
     def get_queryset(self):
-        '''Получение задач, только своей команды.'''
+        """Получение задач, только своей команды."""
         user = self.request.user
-        if user.is_superuser:
-            return super().get_queryset()
-        return Task.objects.filter(
-            team__participants=user
-        ).select_related('executor', 'team')
+        team_id = self.request.query_params.get('team')
+        queryset = Task.objects.filter(team__participants=user)
+        if team_id:
+            queryset = queryset.filter(team_id=team_id)
+        return queryset.select_related('executor', 'team')
 
     @action(detail=True, methods=['put'])
     def update_status(self, request, pk=None):

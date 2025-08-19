@@ -106,6 +106,16 @@ class TeamSerializer(serializers.ModelSerializer):
         )
 
 
+class TeamCreateSerializers(serializers.ModelSerializer):
+
+    class Meta:
+        model = Team
+        fields = (
+            'id',
+            'title',
+        )
+
+
 class TeamAddParticipantSerializer(serializers.Serializer):
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
@@ -170,19 +180,6 @@ class TaskStatusUpdateSerializers(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = ['status']
-
-    def validate_status(self, value):
-        user = self.context['request'].user
-        current_status = self.instance.status
-        if user.is_user:
-            if (
-                value != StatusTask.PROGRESS or
-                current_status != StatusTask.OPEN
-            ):
-                raise serializers.ValidationError(
-                    "Вы можете менять статус только с open на progress"
-                )
-        return value
 
 
 class CommentTaskCreateSerializers(serializers.ModelSerializer):

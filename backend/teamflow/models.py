@@ -33,7 +33,7 @@ class Team(models.Model):
     )
 
     class Meta:
-        ordering = ['-id']
+        ordering = ['id']
         verbose_name = 'Команда'
         verbose_name_plural = 'Команды'
 

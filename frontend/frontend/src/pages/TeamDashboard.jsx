@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
-import { Plus, Trash2, Edit, Save, X, UserPlus } from "react-feather";
+import { Plus, Trash2, Edit, Save, X, UserPlus, List } from "react-feather";
 
 const TeamDashboard = () => {
   const { user: currentUser, token } = useContext(AuthContext);
@@ -248,7 +248,6 @@ const TeamDashboard = () => {
                   </div>
                 )}
               </div>
-
               <div style={styles.participantsContainer}>
                 <h4 style={styles.participantsTitle}>Участники:</h4>
                 <ul style={styles.participantsList}>
@@ -309,6 +308,15 @@ const TeamDashboard = () => {
                     </li>
                   ))}
                 </ul>
+              </div>
+              <div style={styles.teamFooter}>
+                <button 
+                  onClick={() => navigate(`/tasks?team=${team.id}`)}
+                  style={styles.tasksButton}
+                >
+                  <List size={16} style={{ marginRight: "8px" }} />
+                  Просмотр задач
+                </button>
               </div>
             </div>
           ))}
@@ -394,7 +402,7 @@ const styles = {
     color: "#64748b",
   },
   teamsContainer: {
-    display: "grid",
+    display: "flex",
     gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
     gap: "20px",
   },
@@ -404,7 +412,30 @@ const styles = {
     padding: "16px",
     backgroundColor: "white",
     boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    minWidth: "450px",
+  },
+  teamFooter: {
+    marginTop: "auto",
+    paddingTop: "16px",
+    borderTop: "1px solid #f1f5f9",
+    display: "flex",
+    justifyContent: "center",
+  },
+  
+  tasksButton: {
+    display: "flex",
+    alignItems: "center",
+    padding: "10px 16px",
+    backgroundColor: "#6366f1",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
+    transition: "background-color 0.2s",
+    ":hover": {
+      backgroundColor: "#4f46e5",
+    },
   },
   teamHeader: {
     display: "flex",
@@ -445,7 +476,7 @@ const styles = {
     alignItems: "center",
     padding: "12px 0",
     borderBottom: "1px solid #f1f5f9",
-    ":last-child": {
+    ":lastChild": {
       borderBottom: "none",
     },
   },
