@@ -97,7 +97,7 @@ class Evaluation(models.Model):
         Task,
         help_text='Укажите задачу',
         on_delete=models.CASCADE,
-        related_name='tasks',
+        related_name='evaluations',
         verbose_name='задача',
     )
     evaluator = models.ForeignKey(

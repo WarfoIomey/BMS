@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import filters
 
 from api.serializers import (
     CommentTaskCreateSerializers,
@@ -24,7 +26,7 @@ from api.serializers import (
     MeetingSerializers
 )
 from teamflow.models import Comment, Meeting, Team, Task, Evaluation
-from .permissions import IsAdmin, IsManagerOrAdmin
+from .permissions import CanEvaluateTask, IsAdmin, IsManagerOrAdmin
 
 
 User = get_user_model()
@@ -151,9 +153,21 @@ class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
     permission_classes = [IsManagerOrAdmin, IsAuthenticated]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields = ['status', 'executor', 'author']
+    search_fields = ['title', 'description']
+    ordering_fields = ['created_at', 'deadline', 'priority']
+    pagination_class = None
 
     def get_serializer_class(self):
-        if self.action == 'update':
+        if self.action in ['update', 'partial_update']:
+            task = self.get_object()
+            if self.request.user == task.author:
+                return TaskSerializers
             return TaskStatusUpdateSerializers
         return TaskSerializers
 
@@ -178,6 +192,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         detail=True,
         methods=['post'],
         url_path='evaluate',
+        permission_classes=[IsAuthenticated, CanEvaluateTask]
     )
     def evaluate_task(self, request, pk=None):
         task = self.get_object()

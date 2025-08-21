@@ -37,3 +37,10 @@ class IsManagerOrAdmin(permissions.BasePermission):
         if request.method == 'POST':
             if obj.author == request.user:
                 return True
+
+
+class CanEvaluateTask(permissions.BasePermission):
+    """Разрешение на оценку задачи только автором"""
+
+    def has_object_permission(self, request, view, obj):
+        return obj.author == request.user

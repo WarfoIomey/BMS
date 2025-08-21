@@ -142,6 +142,7 @@ class TaskSerializers(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
     executor = UserSerializer(read_only=True)
     team = TeamSerializer(read_only=True)
+    author_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -154,7 +155,8 @@ class TaskSerializers(serializers.ModelSerializer):
             'executor_id',
             'status',
             'executor',
-            'team'
+            'team',
+            'author_rating'
         )
 
     def create(self, validated_data):
@@ -174,6 +176,10 @@ class TaskSerializers(serializers.ModelSerializer):
             'team': team
         })
         return super().create(validated_data)
+
+    def get_author_rating(self, obj):
+        evaluation = obj.evaluations.filter(evaluator=obj.author).first()
+        return evaluation.rating if evaluation else None
 
 
 class TaskStatusUpdateSerializers(serializers.ModelSerializer):
@@ -235,7 +241,7 @@ class CommentTaskReadSerializers(serializers.ModelSerializer):
 class EvaluationCreateSerializers(serializers.ModelSerializer):
     class Meta:
         model = Evaluation
-        fields = ('rating')
+        fields = ('rating',)
         extra_kwargs = {
             'rating': {
                 'min_value': MIN_RATING,
@@ -246,9 +252,13 @@ class EvaluationCreateSerializers(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context['request']
         task = self.context['task']
-        if task.executor == request.user:
+        if task.author != request.user:
             raise serializers.ValidationError(
-                "Нельзя оценивать свою задачу"
+                "Только автор задачи может ее оценивать"
+            )
+        if task.status != StatusTask.COMPLETED:
+            raise serializers.ValidationError(
+                "Нельзя оценивать незавершенную задачу"
             )
         if Evaluation.objects.filter(
             task=task,
@@ -262,12 +272,14 @@ class EvaluationCreateSerializers(serializers.ModelSerializer):
 
 class EvaluationReadSerializers(serializers.ModelSerializer):
     evaluator = UserSerializer(read_only=True)
+    task = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Evaluation
         fields = (
             'id',
             'evaluator',
+            'task',
             'rating',
             'created_at'
         )

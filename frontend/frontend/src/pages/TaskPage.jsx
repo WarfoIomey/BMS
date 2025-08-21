@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
-import { Circle, CheckCircle, RefreshCw, MoreHorizontal, Edit } from "react-feather";
+import { Circle, CheckCircle, RefreshCw, MoreHorizontal, Edit, Star } from "react-feather";
 import ErrorModal from './ErrorModal';
 
 const TaskPage = () => {
@@ -11,43 +11,124 @@ const TaskPage = () => {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [draggedTask, setDraggedTask] = useState(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [hasMore, setHasMore] = useState(true);
+  
+  const observer = useRef();
+  const lastTaskElementRef = useCallback(node => {
+    if (loading || loadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        fetchTasks(true);
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, hasMore]);
+
   const canCreateTask = ['manager', 'admin_team'].includes(user?.role);
   const [filters, setFilters] = useState({
-  executor: '',
-  author: '',
-  priority: '',
-  status: '',
-  deadline: '',
-  search: ''
-});
+    executor: '',
+    author: '',
+    status: '',
+    deadline: '',
+    search: ''
+  });
 
   const teamId = new URLSearchParams(location.search).get("team");
+  const limit = 20;
+  const offsetRef = useRef(0);
 
+  const fetchTasks = async (loadMore = false) => {
+    try {
+      if (loadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        offsetRef.current = 0;
+        setTasks([]);
+        setHasMore(true);
+      }
+
+      const params = new URLSearchParams({
+        team: teamId,
+        limit: limit,
+        offset: offsetRef.current
+      });
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+
+      const res = await axios.get(`http://127.0.0.1:8000/api/tasks/?${params}`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+
+      if (loadMore) {
+        setTasks(prevTasks => [...prevTasks, ...res.data]);
+      } else {
+        setTasks(res.data);
+      }
+
+      offsetRef.current += res.data.length;
+      setHasMore(res.data.length === limit);
+    } catch (err) {
+      console.error("Ошибка загрузки задач", err);
+      handleError("Не удалось загрузить задачи");
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+  const rateTask = async (taskId, rating) => {
+    try {
+      const taskToRate = tasks.find(task => task.id === taskId);
+      if (user.id !== taskToRate.author.id) {
+        handleError("Только автор задачи может её оценивать");
+        return;
+      }
+      await axios.post(
+        `http://127.0.0.1:8000/api/tasks/${taskId}/evaluate/`,
+        { rating: rating },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId 
+            ? { 
+                ...task, 
+                author_rating: rating,
+              } 
+            : task
+        )
+      );
+    } catch (err) {
+      console.error("Ошибка оценки задачи", err);
+      if (err.response?.status === 403) {
+        handleError("Только автор задачи может её оценивать");
+      } else {
+        handleError("Не удалось оценить задачу");
+      }
+    }
+  };
   useEffect(() => {
     if (!teamId) {
       navigate("/teams");
       return;
     }
-
-    const fetchTasks = async () => {
-      try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/tasks/?team=${teamId}`, {
-          headers: { Authorization: `Token ${token}` },
-        });
-        setTasks(res.data.results);
-      } catch (err) {
-        console.error("Ошибка загрузки задач", err);
-        handleError("Не удалось загрузить задачи");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTasks();
+    fetchTasks(false);
   }, [teamId, token, navigate]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchTasks(false);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [filters]);
 
   const handleDragStart = (task) => {
     setDraggedTask(task);
@@ -78,6 +159,58 @@ const TaskPage = () => {
       handleError("Не удалось изменить статус задачи");
     }
   };
+  const renderRatingStars = (task) => {
+  if (task.status !== 'completed') return null;
+
+  const isAuthor = user.id === task.author.id;
+  const canRate = isAuthor && !task.author_rating;
+
+  return (
+    <div style={styles.ratingContainer} onClick={(e) => e.stopPropagation()}>
+      {canRate && (
+        <div style={styles.ratingButtons}>
+          {[1, 2, 3, 4, 5].map(star => (
+            <button
+              key={star}
+              onClick={(e) => {
+                e.stopPropagation();
+                rateTask(task.id, star);
+              }}
+              style={styles.starButton}
+              title={`Оценить на ${star}`}
+            >
+              <Star size={14} />
+              {star}
+            </button>
+          ))}
+        </div>
+      )}
+      {task.author_rating && (
+        <div style={styles.userRating}>
+          <span style={styles.userRatingText}>
+            {isAuthor ? "Ваша оценка: " : "Оценка автора: "}
+            {task.author_rating}
+            <Star size={12} fill="#fbbf24" color="#fbbf24" />
+          </span>
+        </div>
+      )}
+      {!task.author_rating && isAuthor && (
+        <div style={styles.ratingInfo}>
+          <span style={styles.ratingInfoText}>
+            Вы можете оценить эту задачу
+          </span>
+        </div>
+      )}
+      {!task.author_rating && !isAuthor && (
+        <div style={styles.ratingInfo}>
+          <span style={styles.ratingInfoText}>
+            Автор ещё не оценил эту задачу
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -87,7 +220,8 @@ const TaskPage = () => {
       default: return <MoreHorizontal size={16} />;
     }
   };
- const handleError = (message) => {
+
+  const handleError = (message) => {
     setErrorMessage(message);
     setShowErrorModal(true);
   };
@@ -96,42 +230,20 @@ const TaskPage = () => {
     setShowErrorModal(false);
     setErrorMessage('');
   };
-const filteredTasks = (status) => {
-  return tasks.filter(task => {
-    const matchesStatus = task.status === status;
-    const matchesExecutor = !filters.executor || 
-      (task.executor && task.executor.id.toString() === filters.executor);
-    const matchesAuthor = !filters.author || 
-      task.author.id.toString() === filters.author;
-    const matchesPriority = !filters.priority || 
-      task.priority === filters.priority;
-    const matchesSearch = !filters.search || 
-      task.title.toLowerCase().includes(filters.search.toLowerCase()) || 
-      task.description.toLowerCase().includes(filters.search.toLowerCase());
-    const matchesDeadline = !filters.deadline || (
-      task.deadline && (
-        (filters.deadline === 'overdue' && new Date(task.deadline) < new Date()) ||
-        (filters.deadline === 'today' && 
-          new Date(task.deadline).toDateString() === new Date().toDateString()) ||
-        (filters.deadline === 'future' && 
-          new Date(task.deadline) > new Date())
-      )
-    );
-    
-    return matchesStatus && matchesExecutor && matchesAuthor && 
-           matchesPriority && matchesSearch && matchesDeadline;
-  });
-};
-const resetFilters = () => {
-  setFilters({
-    executor: '',
-    author: '',
-    priority: '',
-    status: '',
-    deadline: '',
-    search: ''
-  });
-};
+
+  const filteredTasks = (status) => {
+    return tasks.filter(task => task.status === status);
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      executor: '',
+      author: '',
+      status: '',
+      deadline: '',
+      search: ''
+    });
+  };
 
   if (loading) return <div style={styles.loading}>Загрузка...</div>;
 
@@ -198,6 +310,7 @@ const resetFilters = () => {
           Сбросить
         </button>
       </div>
+      
       <div style={styles.board}>
         {['open', 'progress', 'completed'].map((status) => (
           <div 
@@ -217,50 +330,61 @@ const resetFilters = () => {
             </div>
 
             <div style={styles.taskList}>
-              {filteredTasks(status).map((task) => (
-                <div
-                  key={task.id}
-                  style={styles.taskCard}
-                  draggable
-                  onDragStart={() => handleDragStart(task)}
-                  onClick={() => navigate(`/tasks/${task.id}`)}
-                >
-                  <div style={styles.taskHeader}>
-                    <h4 style={styles.taskTitle}>{task.title}</h4>
-                    {user.id === task.author.id && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/tasks/${task.id}/edit`);
-                        }}
-                        style={styles.editButton}
-                      >
-                        <Edit size={14} />
-                      </button>
-                    )}
+              {filteredTasks(status).map((task, index) => {
+                const isLastElement = filteredTasks(status).length === index + 1 && hasMore;
+                
+                return (
+                  <div
+                    ref={isLastElement ? lastTaskElementRef : null}
+                    key={task.id}
+                    style={styles.taskCard}
+                    draggable
+                    onDragStart={() => handleDragStart(task)}
+                    onClick={() => navigate(`/tasks/${task.id}`)}
+                  >
+                    <div style={styles.taskHeader}>
+                      <h4 style={styles.taskTitle}>{task.title}</h4>
+                      {user.id === task.author.id && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/tasks/${task.id}/edit?team=${task.team.id}`);
+                          }}
+                          style={styles.editButton}
+                        >
+                          <Edit size={14} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <p style={styles.taskDescription}>
+                      {task.description.length > 100
+                        ? `${task.description.substring(0, 100)}...`
+                        : task.description}
+                    </p>
+                    
+                    {task.status === 'completed' && renderRatingStars(task)}
+                    
+                    <div style={styles.taskFooter}>
+                      <span style={styles.executor}>
+                        {task.executor ? task.executor.username : 'Не назначен'}
+                      </span>
+                      <span style={styles.statusBadge}>
+                        {getStatusIcon(task.status)}
+                        {task.status}
+                      </span>
+                    </div>
                   </div>
-                  
-                  <p style={styles.taskDescription}>
-                    {task.description.length > 100
-                      ? `${task.description.substring(0, 100)}...`
-                      : task.description}
-                  </p>
-                  
-                  <div style={styles.taskFooter}>
-                    <span style={styles.executor}>
-                      {task.executor ? task.executor.username : 'Не назначен'}
-                    </span>
-                    <span style={styles.statusBadge}>
-                      {getStatusIcon(task.status)}
-                      {task.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+              {loadingMore && (
+                <div style={styles.loadingMore}>Загрузка...</div>
+              )}
             </div>
           </div>
         ))}
       </div>
+      
       {showErrorModal && (
         <ErrorModal 
           message={errorMessage}
@@ -283,11 +407,11 @@ const styles = {
     padding: "40px",
     fontSize: "18px",
   },
-  error: {
+  loadingMore: {
     textAlign: "center",
-    padding: "40px",
-    color: "#dc2626",
-    fontSize: "18px",
+    padding: "20px",
+    fontSize: "14px",
+    color: "#64748b",
   },
   header: {
     display: "flex",
@@ -303,22 +427,20 @@ const styles = {
     borderRadius: "6px",
     cursor: "pointer",
     fontWeight: "500",
-    ":hover": {
-      backgroundColor: "#4338ca",
-    },
   },
   board: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
     gap: "16px",
-    height: "100%",
+    minHeight: "600px",
   },
   column: {
     backgroundColor: "#f8fafc",
     borderRadius: "8px",
     padding: "16px",
-    minHeight: "600px",
     border: "1px solid #e2e8f0",
+    maxHeight: "80vh",
+    overflowY: "auto",
   },
   columnHeader: {
     display: "flex",
@@ -326,6 +448,10 @@ const styles = {
     marginBottom: "16px",
     paddingBottom: "12px",
     borderBottom: "1px solid #e2e8f0",
+    position: "sticky",
+    top: 0,
+    backgroundColor: "#f8fafc",
+    zIndex: 1,
   },
   columnTitle: {
     margin: "0 8px",
@@ -351,10 +477,6 @@ const styles = {
     border: "1px solid #e2e8f0",
     cursor: "pointer",
     transition: "all 0.2s",
-    ":hover": {
-      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-      transform: "translateY(-2px)",
-    },
   },
   taskHeader: {
     display: "flex",
@@ -373,9 +495,6 @@ const styles = {
     border: "none",
     cursor: "pointer",
     color: "#64748b",
-    ":hover": {
-      color: "#4f46e5",
-    },
   },
   taskDescription: {
     margin: "8px 0",
@@ -412,7 +531,6 @@ const styles = {
     padding: '15px',
     borderRadius: '8px',
   },
-
   searchInput: {
     padding: '8px 12px',
     border: '1px solid #ddd',
@@ -435,12 +553,103 @@ const styles = {
     color: '#64748b',
     cursor: 'pointer',
     fontWeight: '500',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#f1f5f9',
-      color: '#475569',
-    },
   },
+    ratingContainer: {
+    margin: '8px 0',
+    padding: '8px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '4px',
+    border: '1px solid #e2e8f0',
+  },
+  
+  averageRating: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginBottom: '6px',
+    fontSize: '12px',
+    color: '#475569',
+  },
+  
+  ratingText: {
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  
+  ratingCount: {
+    color: '#64748b',
+    fontSize: '11px',
+  },
+  
+  ratingButtons: {
+    display: 'flex',
+    gap: '4px',
+    flexWrap: 'wrap',
+  },
+  
+  starButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    padding: '4px 6px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '4px',
+    backgroundColor: 'white',
+    cursor: 'pointer',
+    fontSize: '11px',
+    transition: 'all 0.2s',
+  },
+  
+  starButtonHover: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fbbf24',
+  },
+  
+  userRating: {
+    marginTop: '6px',
+    paddingTop: '6px',
+    borderTop: '1px solid #e2e8f0',
+  },
+  
+  userRatingText: {
+    fontSize: '11px',
+    color: '#059669',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+    ratingInfo: {
+    marginTop: '6px',
+    paddingTop: '6px',
+    borderTop: '1px solid #e2e8f0',
+  },
+  ratingInfoText: {
+    fontSize: '11px',
+    color: '#64748b',
+    fontStyle: 'italic',
+  },
+};
+
+// Добавляем hover-эффекты через CSS-in-JS
+const hoverStyles = {
+  createButtonHover: {
+    backgroundColor: "#4338ca",
+  },
+  editButtonHover: {
+    color: "#4f46e5",
+  },
+  resetButtonHover: {
+    backgroundColor: "#f1f5f9",
+    color: "#475569",
+  },
+  taskCardHover: {
+    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+    transform: "translateY(-2px)",
+  },
+  starButtonHover: {
+    backgroundColor: "#fef3c7",
+    borderColor: "#fbbf24",
+  }
 };
 
 export default TaskPage;
