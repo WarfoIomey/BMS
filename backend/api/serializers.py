@@ -190,9 +190,13 @@ class TaskStatusUpdateSerializers(serializers.ModelSerializer):
 
 class CommentTaskCreateSerializers(serializers.ModelSerializer):
     """Сериализатор для комментариев."""
+    author = UserSerializer(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = Comment
-        fields = ('text',)
+        fields = ('id', 'text', 'author', 'created_at')
+        read_only_fields = ('id', 'author', 'created_at')
         extra_kwargs = {
             'text': {
                 'required': True,
@@ -213,13 +217,6 @@ class CommentTaskCreateSerializers(serializers.ModelSerializer):
             )
         )
         return attrs
-
-    def create(self, validated_data):
-        return Comment.objects.create(
-            text=validated_data['text'],
-            author=self.context['request'].user,
-            task=validated_data['task']
-        )
 
 
 class CommentTaskReadSerializers(serializers.ModelSerializer):
@@ -294,6 +291,7 @@ class MeetingSerializers(serializers.ModelSerializer):
         allow_empty=False,
         required=True
     )
+    organizer = UserSerializer(read_only=True)
 
     class Meta:
         model = Meeting

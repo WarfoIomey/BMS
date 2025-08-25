@@ -37,6 +37,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     queryset = User.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
+    pagination_class = None
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -66,6 +67,20 @@ class UserViewSet(viewsets.ModelViewSet):
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'], url_path='team-users')
+    def team_users(self, request):
+        """Получение пользователей из команды текущего пользователя."""
+        user = request.user
+        if not user.teams.exists():
+            return Response(
+                {"detail": "Пользователь не состоит ни в одной команде"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        team = user.teams.first()
+        team_users = team.participants.all()
+        serializer = UserSerializer(team_users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -241,14 +256,15 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_serializer_class(self):
-        if self.request.method in ['POST']:
+        if self.request.method in ['POST', 'PUT', 'PATCH']:
             return CommentTaskCreateSerializers
         return CommentTaskReadSerializers
 
     def get_queryset(self) -> QuerySet[Comment]:
-        task: Task = get_object_or_404(
+        task = get_object_or_404(
             Task.objects.filter(
                 id=self.kwargs['task_pk'],
                 team__participants=self.request.user
@@ -256,10 +272,14 @@ class CommentViewSet(viewsets.ModelViewSet):
         )
         return task.comments.select_related('author').order_by('-created_at')
 
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
 
 class MeetingViewSet(viewsets.ModelViewSet):
     serializer_class = MeetingSerializers
     permission_classes = [IsManagerOrAdmin]
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user

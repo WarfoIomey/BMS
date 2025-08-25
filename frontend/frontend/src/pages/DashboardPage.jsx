@@ -15,6 +15,7 @@ export default function DashboardPage() {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -56,7 +57,7 @@ export default function DashboardPage() {
       setSuccess("Данные успешно обновлены!");
       setError(null);
       setIsEditing(false);
-      fetchUserData(); // Обновляем данные
+      fetchUserData();
     } catch (err) {
       setError(err.response?.data || "Ошибка обновления данных");
       setSuccess(null);
@@ -83,15 +84,29 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      await axios.delete(
+        `http://127.0.0.1:8000/api/users/${currentUser.id}/`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      setSuccess("Аккаунт успешно удален!");
+      setTimeout(() => {
+        logout();
+      }, 2000);
+    } catch (err) {
+      setError(err.response?.data || "Ошибка удаления аккаунта");
+      setSuccess(null);
+    }
+  };
+
   if (!userData) return <p>Загрузка...</p>;
 
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>Профиль пользователя</h2>
-      
       {error && <div style={styles.error}>{JSON.stringify(error)}</div>}
       {success && <div style={styles.success}>{success}</div>}
-
       {isEditing ? (
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.formGroup}>
@@ -105,7 +120,6 @@ export default function DashboardPage() {
               required
             />
           </div>
-          
           <div style={styles.formGroup}>
             <label>Имя пользователя:</label>
             <input
@@ -117,7 +131,6 @@ export default function DashboardPage() {
               required
             />
           </div>
-          
           <div style={styles.formGroup}>
             <label>Имя:</label>
             <input
@@ -128,7 +141,6 @@ export default function DashboardPage() {
               style={styles.input}
             />
           </div>
-          
           <div style={styles.formGroup}>
             <label>Фамилия:</label>
             <input
@@ -139,7 +151,6 @@ export default function DashboardPage() {
               style={styles.input}
             />
           </div>
-          
           <div style={styles.formGroup}>
             <label>О себе:</label>
             <textarea
@@ -150,7 +161,6 @@ export default function DashboardPage() {
               rows="4"
             />
           </div>
-          
           <div style={styles.buttonGroup}>
             <button type="submit" style={styles.saveButton}>Сохранить</button>
             <button 
@@ -184,7 +194,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
       <div style={styles.section}>
         <h3 style={styles.subtitle}>Смена пароля</h3>
         <form onSubmit={handlePasswordChange} style={styles.form}>
@@ -212,6 +221,41 @@ export default function DashboardPage() {
             Сменить пароль
           </button>
         </form>
+      </div>
+      <div style={styles.section}>
+        <h3 style={styles.subtitle}>Удаление аккаунта</h3>
+        <p style={styles.warningText}>
+          Внимание: Это действие необратимо. Все ваши данные будут удалены без возможности восстановления.
+        </p>
+        
+        {!showDeleteConfirm ? (
+          <button 
+            onClick={() => setShowDeleteConfirm(true)}
+            style={styles.deleteButton}
+          >
+            Удалить аккаунт
+          </button>
+        ) : (
+          <div style={styles.deleteConfirm}>
+            <p style={styles.confirmText}>
+              Вы уверены, что хотите удалить свой аккаунт? Это действие нельзя отменить.
+            </p>
+            <div style={styles.buttonGroup}>
+              <button 
+                onClick={handleDeleteAccount}
+                style={styles.confirmDeleteButton}
+              >
+                Да, удалить аккаунт
+              </button>
+              <button 
+                onClick={() => setShowDeleteConfirm(false)}
+                style={styles.cancelButton}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -309,6 +353,22 @@ const styles = {
     borderRadius: "4px",
     cursor: "pointer",
   },
+  deleteButton: {
+    padding: "10px 15px",
+    backgroundColor: "#d32f2f",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
+  confirmDeleteButton: {
+    padding: "10px 15px",
+    backgroundColor: "#d32f2f",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
   error: {
     color: "red",
     backgroundColor: "#ffebee",
@@ -325,5 +385,23 @@ const styles = {
   },
   section: {
     marginTop: "30px",
+    padding: "20px",
+    backgroundColor: "white",
+    borderRadius: "5px",
+  },
+  warningText: {
+    color: "#d32f2f",
+    marginBottom: "15px",
+    fontWeight: "bold",
+  },
+  deleteConfirm: {
+    padding: "15px",
+    backgroundColor: "#ffebee",
+    borderRadius: "5px",
+    border: "1px solid #ffcdd2",
+  },
+  confirmText: {
+    color: "#d32f2f",
+    marginBottom: "15px",
   },
 };

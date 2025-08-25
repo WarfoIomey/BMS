@@ -18,11 +18,21 @@ router.register(r'meetings', MeetingViewSet, basename='meetings')
 comment_urls = [
     path(
         'tasks/<int:task_pk>/comments/',
-        CommentViewSet.as_view({'get': 'list', 'post': 'create'})
+        CommentViewSet.as_view({
+            'get': 'list', 
+            'post': 'create'
+        }),
+        name='task-comments'
     ),
     path(
         'tasks/<int:task_pk>/comments/<int:pk>/',
-        CommentViewSet.as_view({'get': 'retrieve', 'put': 'update'})
+        CommentViewSet.as_view({
+            'get': 'retrieve', 
+            'put': 'update',
+            'patch': 'partial_update',
+            'delete': 'destroy'
+        }),
+        name='task-comment-detail'
     ),
 ]
 

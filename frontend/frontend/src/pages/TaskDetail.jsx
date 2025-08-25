@@ -11,7 +11,9 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  MessageCircle,
+  Send
 } from "react-feather";
 
 const TaskDetail = () => {
@@ -23,6 +25,12 @@ const TaskDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  
+  // Состояния для комментариев
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [sendingComment, setSendingComment] = useState(false);
 
   useEffect(() => {
     const fetchTask = async () => {
@@ -39,7 +47,21 @@ const TaskDetail = () => {
       }
     };
 
+    const fetchComments = async () => {
+      try {
+        const response = await axios.get(`http://127.0.0.1:8000/api/tasks/${id}/comments/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        setComments(response.data);
+      } catch (err) {
+        console.error("Ошибка загрузки комментариев", err);
+      } finally {
+        setLoadingComments(false);
+      }
+    };
+
     fetchTask();
+    fetchComments();
   }, [id, token]);
 
   const handleStatusChange = async (newStatus) => {
@@ -52,7 +74,8 @@ const TaskDetail = () => {
         { status: newStatus },
         { headers: { Authorization: `Token ${token}` } }
       );
-
+      console.log('Ответ от сервера:', response.data); // ← ДОБАВЬТЕ ЭТО
+      console.log('Автор:', response.data.author);
       setTask(prev => ({ ...prev, status: newStatus }));
     } catch (err) {
       console.error("Ошибка изменения статуса", err);
@@ -61,6 +84,37 @@ const TaskDetail = () => {
       setIsChangingStatus(false);
     }
   };
+
+  const handleSendComment = async (e) => {
+  e.preventDefault();
+  if (!newComment.trim() || sendingComment) return;
+
+  setSendingComment(true);
+  try {
+    const response = await axios.post(
+      `http://127.0.0.1:8000/api/tasks/${id}/comments/`,
+      { text: newComment },
+      { 
+        headers: { 
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      }
+    );
+
+    setComments(prev => [response.data, ...prev]);
+    setNewComment("");
+  } catch (err) {
+    console.error("Ошибка отправки комментария", err);
+    if (err.response?.data) {
+      alert(err.response.data.text || "Не удалось отправить комментарий");
+    } else {
+      alert("Не удалось отправить комментарий");
+    }
+  } finally {
+    setSendingComment(false);
+  }
+};
 
   const getStatusInfo = (status) => {
     switch (status) {
@@ -75,8 +129,19 @@ const TaskDetail = () => {
     }
   };
 
+  const formatDateTime = (dateString) => {
+    return new Date(dateString).toLocaleString('ru-RU', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const canEdit = user?.id === task?.author?.id;
   const canChangeStatus = user?.role === 'manager' || user?.role === 'admin_team' || user?.id === task?.executor?.id;
+  const canComment = user?.id === task?.author?.id || user?.id === task?.executor?.id || user?.role === 'manager' || user?.role === 'admin_team';
 
   if (loading) return <div style={styles.loading}>Загрузка...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
@@ -146,6 +211,60 @@ const TaskDetail = () => {
               </div>
             </div>
           )}
+
+          {/* Секция комментариев */}
+          <div style={styles.commentsSection}>
+            <h3 style={styles.sectionTitle}>
+              <MessageCircle size={18} />
+              Комментарии ({comments.length})
+            </h3>
+
+            {canComment && (
+              <form onSubmit={handleSendComment} style={styles.commentForm}>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Напишите комментарий..."
+                  style={styles.commentInput}
+                  rows={3}
+                  disabled={sendingComment}
+                />
+                <button 
+                  type="submit" 
+                  style={styles.sendButton}
+                  disabled={!newComment.trim() || sendingComment}
+                >
+                  <Send size={16} />
+                  {sendingComment ? "Отправка..." : "Отправить"}
+                </button>
+              </form>
+            )}
+
+            {loadingComments ? (
+              <div style={styles.loadingComments}>Загрузка комментариев...</div>
+            ) : comments.length === 0 ? (
+              <div style={styles.noComments}>Комментариев пока нет</div>
+            ) : (
+              <div style={styles.commentsList}>
+                {comments.map((comment) => (
+                  <div key={comment.id} style={styles.commentItem}>
+                    <div style={styles.commentHeader}>
+                      <div style={styles.commentAuthor}>
+                        <User size={14} />
+                        {comment.author.username}
+                      </div>
+                      <div style={styles.commentTime}>
+                        {formatDateTime(comment.created_at)}
+                      </div>
+                    </div>
+                    <div style={styles.commentText}>
+                      {comment.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={styles.sidebar}>
@@ -408,6 +527,93 @@ const styles = {
       opacity: 0.6,
       cursor: "not-allowed",
     },
+  },
+    commentsSection: {
+    backgroundColor: "white",
+    padding: "24px",
+    borderRadius: "8px",
+    border: "1px solid #e2e8f0",
+  },
+  commentForm: {
+    marginBottom: "20px",
+  },
+  commentInput: {
+    width: "100%",
+    padding: "12px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "6px",
+    resize: "vertical",
+    fontFamily: "inherit",
+    fontSize: "14px",
+    marginBottom: "12px",
+    ":focus": {
+      outline: "none",
+      borderColor: "#3b82f6",
+    },
+  },
+  sendButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 16px",
+    backgroundColor: "#4f46e5",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "14px",
+    ":hover:not(:disabled)": {
+      backgroundColor: "#4338ca",
+    },
+    ":disabled": {
+      backgroundColor: "#9ca3af",
+      cursor: "not-allowed",
+    },
+  },
+  loadingComments: {
+    textAlign: "center",
+    padding: "20px",
+    color: "#6b7280",
+  },
+  noComments: {
+    textAlign: "center",
+    padding: "20px",
+    color: "#6b7280",
+    fontStyle: "italic",
+  },
+  commentsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  commentItem: {
+    padding: "16px",
+    border: "1px solid #f1f5f9",
+    borderRadius: "8px",
+    backgroundColor: "#f8fafc",
+  },
+  commentHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "8px",
+    fontSize: "12px",
+    color: "#64748b",
+  },
+  commentAuthor: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontWeight: "500",
+  },
+  commentTime: {
+    fontSize: "11px",
+  },
+  commentText: {
+    fontSize: "14px",
+    lineHeight: "1.5",
+    color: "#374151",
+    whiteSpace: "pre-wrap",
   },
 };
 

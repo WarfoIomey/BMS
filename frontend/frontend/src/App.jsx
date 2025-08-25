@@ -8,6 +8,8 @@ import TeamDashboard from "./pages/TeamDashboard";
 import TaskPage from "./pages/TaskPage";
 import TaskForm from "./pages/TaskForm";
 import TaskDetail from "./pages/TaskDetail";
+import MeetingPage from "./pages/MeetingsPage";
+import MeetingForm from "./pages/MeetingForm";
 
 function Layout({ children }) {
   return (
@@ -59,6 +61,21 @@ export default function App() {
       <Route path="/tasks" element={<PrivateRoute><TaskPage /></PrivateRoute>} />
       
       <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/meetings" element={
+        <PrivateRoute>
+          <MeetingPage />
+        </PrivateRoute>
+      } />
+      <Route path="/meetings/create" element={
+        <PrivateRoute>
+          <MeetingForm />
+        </PrivateRoute>
+      } />
+      <Route path="/meetings/:id/edit" element={
+        <PrivateRoute>
+          <MeetingForm />
+        </PrivateRoute>
+      } />
     </Routes>
   </Router>
 </AuthProvider>

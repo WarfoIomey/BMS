@@ -59,6 +59,9 @@ const Header = () => {
                 >
                   Команды
                 </Link>
+                <Link to="/meetings" style={navLinkStyle}>
+                  Календарь
+                </Link>
               </>
             )}
             <button onClick={handleLogout} style={logoutButtonStyle}>

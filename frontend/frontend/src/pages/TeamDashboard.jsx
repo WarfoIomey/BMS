@@ -42,7 +42,7 @@ const TeamDashboard = () => {
       const res = await axios.get("http://127.0.0.1:8000/api/users/", {
         headers: { Authorization: `Token ${token}` },
       });
-      setUsers(res.data.results);
+      setUsers(res.data);
     } catch (err) {
       console.error("Ошибка загрузки пользователей", err.response?.data || err.message);
     }
