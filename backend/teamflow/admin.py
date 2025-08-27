@@ -1,10 +1,13 @@
-from typing import Any
 from django.contrib import admin
-from django.db.models.fields.related import ManyToManyField
-from django.forms.models import ModelMultipleChoiceField
-from django.http import HttpRequest
 
-from .models import Comment, Team, Task, Evaluation, Meeting
+from .models import (
+    Comment,
+    Team,
+    Task,
+    Evaluation,
+    Meeting,
+    Membership
+)
 
 
 @admin.register(Team)
@@ -63,4 +66,16 @@ class MeetingAdmin(admin.ModelAdmin):
         'date',
         'time',
         'duration',
+    )
+
+
+@admin.register(Membership)
+class MembershipAdmin(admin.ModelAdmin):
+    """Настройка админки для модели Membership."""
+
+    list_display = (
+        'id',
+        'user',
+        'team',
+        'role',
     )

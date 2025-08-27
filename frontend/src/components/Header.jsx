@@ -14,12 +14,10 @@ const Header = () => {
 
   const isAuthPage = ['/login', '/register', '/'].includes(location.pathname);
 
-  // Функция для определения активного пути
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  // Стиль для активной ссылки
   const activeLinkStyle = {
     ...navLinkStyle,
     backgroundColor: '#3a3f4b',
@@ -58,9 +56,6 @@ const Header = () => {
                   style={isActive('/teams') ? activeLinkStyle : navLinkStyle}
                 >
                   Команды
-                </Link>
-                <Link to="/meetings" style={navLinkStyle}>
-                  Календарь
                 </Link>
               </>
             )}

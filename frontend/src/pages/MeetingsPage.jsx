@@ -15,22 +15,37 @@ const MeetingPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const teamId = new URLSearchParams(location.search).get("team");
+  const [myRole, setMyRole] = useState(null);
+  const canCreateMeeting = ['manager', 'admin'].includes(myRole);
 
   useEffect(() => {
     fetchData();
   }, []);
+  useEffect(() => {
+    if (!teamId) return;
+    axios.get(`/api/teams/${teamId}/my-role/`, {
+      headers: { Authorization: `Token ${token}` }
+    }).then(res => setMyRole(res.data.role))
+      .catch(err => console.error(err));
+  }, [teamId, token]);
 
   const fetchData = async () => {
     try {
+      const params = {};
+      if (teamId) {
+        params.team = teamId;
+      }
+
       const [meetingsRes, tasksRes] = await Promise.all([
-        axios.get("http://127.0.0.1:8000/api/meetings/", {
+        axios.get("/api/meetings/", {
+          params,
           headers: { Authorization: `Token ${token}` },
         }),
-        axios.get("http://127.0.0.1:8000/api/tasks/", {
+        axios.get(`/api/tasks/`, {
+          params: { ...params},
           headers: { Authorization: `Token ${token}` },
         })
       ]);
-
       setMeetings(meetingsRes.data);
       setTasks(tasksRes.data);
     } catch (err) {
@@ -127,7 +142,7 @@ const MeetingPage = () => {
                   >
                     {event.date ? '📅' : '✅'} 
                     {event.title ? event.title.substring(0, 15) + (event.title.length > 15 ? '...' : '') : `Встреча ${event.time}`}
-                    {event.date && event.organizer?.id === user?.id && (
+                    {event.date && event.author?.id === user?.id && (
                       <span style={styles.organizerBadge}> 👑</span>
                     )}
                   </div>
@@ -209,7 +224,7 @@ const MeetingPage = () => {
                     <div key={index} style={styles.timelineEvent}>
                       <div style={styles.eventHeader}>
                         <div style={styles.eventTime}>{event.time}</div>
-                        {event.organizer?.id === user?.id && (
+                        {event.author?.id === user?.id && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -257,7 +272,6 @@ const MeetingPage = () => {
 
   if (loading) return <div style={styles.loading}>Загрузка...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
-
   return (
     <div style={styles.meetingPage}>
       <div style={styles.calendarHeader}>
@@ -300,7 +314,7 @@ const MeetingPage = () => {
             <option value="month">Месяц</option>
             <option value="day">День</option>
           </select>
-          {(user?.role === 'admin_team' || user?.role === 'manager') && (
+          {canCreateMeeting &&  (
             <button 
               onClick={() => navigate(`/meetings/create?team=${teamId}`)}
               style={styles.createButton}

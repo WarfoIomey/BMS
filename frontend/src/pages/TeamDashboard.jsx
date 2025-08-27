@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
-import { Plus, Trash2, Edit, Save, X, UserPlus, List } from "react-feather";
+import { Plus, Trash2, Edit, Save, X, UserPlus, List, Calendar  } from "react-feather";
 
 const TeamDashboard = () => {
   const { user: currentUser, token } = useContext(AuthContext);
@@ -11,6 +11,7 @@ const TeamDashboard = () => {
   const [users, setUsers] = useState([]);
   const [newTeamTitle, setNewTeamTitle] = useState("");
   const [selectedUsers, setSelectedUsers] = useState({});
+  const [selectedRoles, setSelectedRoles] = useState({});
   const [editingRoles, setEditingRoles] = useState({});
   const [roleValues, setRoleValues] = useState({});
   const [error, setError] = useState(null);
@@ -27,10 +28,10 @@ const TeamDashboard = () => {
 
   const fetchTeams = async () => {
     try {
-      const res = await axios.get("http://127.0.0.1:8000/api/teams/", {
+      const res = await axios.get("/api/teams/", {
         headers: { Authorization: `Token ${token}` },
       });
-      setTeams(res.data.results);
+      setTeams(res.data.results || res.data);
     } catch (err) {
       console.error("Ошибка загрузки команд", err.response?.data || err.message);
       setError("Не удалось загрузить команды");
@@ -39,7 +40,7 @@ const TeamDashboard = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get("http://127.0.0.1:8000/api/users/", {
+      const res = await axios.get("/api/users/", {
         headers: { Authorization: `Token ${token}` },
       });
       setUsers(res.data);
@@ -55,7 +56,7 @@ const TeamDashboard = () => {
     }
     try {
       const res = await axios.post(
-        "http://127.0.0.1:8000/api/teams/",
+        "/api/teams/",
         { title: newTeamTitle },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -71,18 +72,21 @@ const TeamDashboard = () => {
 
   const addParticipant = async (teamId) => {
     const userId = selectedUsers[teamId];
+    const role = selectedRoles[teamId] || 'participant';
+    
     if (!userId) {
       setError("Выберите пользователя");
       return;
     }
     try {
       await axios.put(
-        `http://127.0.0.1:8000/api/teams/${teamId}/add-participant/`,
-        { user_id: userId },
+        `/api/teams/${teamId}/add-participant/`,
+        { user_id: userId, role },
         { headers: { Authorization: `Token ${token}` } }
       );
       fetchTeams();
       setSelectedUsers((prev) => ({ ...prev, [teamId]: "" }));
+      setSelectedRoles((prev) => ({ ...prev, [teamId]: "participant" }));
       setSuccess("Участник добавлен");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -94,7 +98,7 @@ const TeamDashboard = () => {
   const removeParticipant = async (teamId, userId) => {
     try {
       await axios.delete(
-        `http://127.0.0.1:8000/api/teams/${teamId}/remove-participant/`,
+        `/api/teams/${teamId}/remove-participant/`,
         {
           data: { user_id: userId },
           headers: { Authorization: `Token ${token}` },
@@ -115,7 +119,7 @@ const TeamDashboard = () => {
     
     try {
       await axios.put(
-        `http://127.0.0.1:8000/api/teams/${teamId}/change-role/`,
+        `/api/teams/${teamId}/change-role/`,
         { user_id: userId, role: newRole },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -147,45 +151,55 @@ const TeamDashboard = () => {
 
   const getRoleDisplayName = (role) => {
     switch (role) {
-      case 'admin_team':
-        return 'Администратор';
+      case 'admin':
+        return 'Администратор команды';
       case 'manager':
         return 'Менеджер';
-      case 'user':
-        return 'Пользователь';
+      case 'participant':
+        return 'Участник';
       default:
         return role;
     }
   };
 
-  const isCurrentUser = (participant) => currentUser.id === participant.id;
-  const isAdmin = currentUser?.role === 'admin_team';
+  const isTeamAdmin = (team) => {
+    const adminMember = team.participants?.find(p => p.role.toLowerCase() === 'admin');
+    return adminMember?.user?.id === currentUser.id;
+  };
+
+  const canEditParticipant = (team, participant) => {
+    if (!isTeamAdmin(team)) return false;
+    if (participant.user.id === currentUser.id) return false;
+    return true;
+  };
+
+  const canAddParticipants = (team) => {
+    return isTeamAdmin(team);
+  };
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <h2 style={styles.title}>Управление командами</h2>
-        {isAdmin && (
-          <div style={styles.createTeamContainer}>
-            <input
-              type="text"
-              placeholder="Название новой команды"
-              value={newTeamTitle}
-              onChange={(e) => {
-                setNewTeamTitle(e.target.value);
-                setError(null);
-              }}
-              style={styles.input}
-            />
-            <button 
-              onClick={createTeam}
-              style={styles.primaryButton}
-            >
-              <Plus size={16} style={{ marginRight: "8px" }} />
-              Создать команду
-            </button>
-          </div>
-        )}
+        <div style={styles.createTeamContainer}>
+          <input
+            type="text"
+            placeholder="Название новой команды"
+            value={newTeamTitle}
+            onChange={(e) => {
+              setNewTeamTitle(e.target.value);
+              setError(null);
+            }}
+            style={styles.input}
+          />
+          <button 
+            onClick={createTeam}
+            style={styles.primaryButton}
+          >
+            <Plus size={16} style={{ marginRight: "8px" }} />
+            Создать команду
+          </button>
+        </div>
       </div>
 
       {(error || success) && (
@@ -200,23 +214,23 @@ const TeamDashboard = () => {
       {teams.length === 0 ? (
         <div style={styles.emptyState}>
           <p>Команд пока нет</p>
-          {isAdmin && (
-            <button 
-              onClick={createTeam}
-              style={styles.primaryButton}
-            >
-              <Plus size={16} style={{ marginRight: "8px" }} />
-              Создать первую команду
-            </button>
-          )}
         </div>
       ) : (
         <div style={styles.teamsContainer}>
-          {teams.map((team) => (
-            <div key={team.id} style={styles.teamCard}>
-              <div style={styles.teamHeader}>
-                <h3 style={styles.teamTitle}>{team.title}</h3>
-                {isAdmin && (
+          {teams.map((team) => {
+            const userIsTeamAdmin = isTeamAdmin(team);
+            const participants = team.participants || [];
+            
+            return (
+              <div key={team.id} style={styles.teamCard}>
+                <div style={styles.teamHeader}>
+                  <h3 style={styles.teamTitle}>{team.title}</h3>
+                  {userIsTeamAdmin && (
+                    <span style={styles.adminBadge}>Администратор</span>
+                  )}
+                </div>
+                
+                {canAddParticipants(team) && (
                   <div style={styles.addParticipantContainer}>
                     <select
                       value={selectedUsers[team.id] || ""}
@@ -231,12 +245,26 @@ const TeamDashboard = () => {
                     >
                       <option value="">Выберите участника</option>
                       {users
-                        .filter(u => !team.participants.some(p => p.id === u.id))
+                        .filter(u => !participants.some(p => p.user.id === u.id))
                         .map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.username} ({u.email})
                           </option>
                         ))}
+                    </select>
+                    <select
+                      value={selectedRoles[team.id] || "participant"}
+                      onChange={(e) => {
+                        setSelectedRoles((prev) => ({
+                          ...prev,
+                          [team.id]: e.target.value,
+                        }));
+                      }}
+                      style={styles.select}
+                    >
+                      <option value="participant">Участник</option>
+                      <option value="manager">Менеджер</option>
+                      <option value="admin">Администратор</option>
                     </select>
                     <button
                       onClick={() => addParticipant(team.id)}
@@ -247,79 +275,92 @@ const TeamDashboard = () => {
                     </button>
                   </div>
                 )}
-              </div>
-              <div style={styles.participantsContainer}>
-                <h4 style={styles.participantsTitle}>Участники:</h4>
-                <ul style={styles.participantsList}>
-                  {team.participants.map((participant) => (
-                    <li key={participant.id} style={styles.participantItem}>
-                      <div style={styles.participantInfo}>
-                        <div>
-                          <strong>{participant.username}</strong>
-                          <span style={styles.participantEmail}> ({participant.email})</span>
+                
+                <div style={styles.participantsContainer}>
+                  <h4 style={styles.participantsTitle}>Участники:</h4>
+                  <ul style={styles.participantsList}>
+                    {participants.map((participant) => (
+                      <li key={participant.user.id} style={styles.participantItem}>
+                        <div style={styles.participantInfo}>
+                          <div>
+                            <strong>{participant.user.username}</strong>
+                            <span style={styles.participantEmail}> ({participant.user.email})</span>
+                          </div>
+                          <div style={styles.participantRole}>
+                            Роль: {getRoleDisplayName(participant.role)}
+                            {participant.user.id === currentUser.id && " (Вы)"}
+                            {participant.role === 'admin' && " 👑"}
+                          </div>
                         </div>
-                        <div style={styles.participantRole}>
-                          Роль: {getRoleDisplayName(participant.role)}
-                        </div>
-                      </div>
 
-                      {isAdmin && !isCurrentUser(participant) && (
-                        <div style={styles.participantActions}>
-                          {editingRoles[`${team.id}-${participant.id}`] ? (
-                            <div style={styles.roleEditContainer}>
-                              <select
-                                value={roleValues[`${team.id}-${participant.id}`] || participant.role}
-                                onChange={(e) => handleRoleChange(team.id, participant.id, e.target.value)}
-                                style={styles.select}
-                              >
-                                <option value="user">Пользователь</option>
-                                <option value="manager">Менеджер</option>
-                              </select>
+                        {canEditParticipant(team, participant) && (
+                          <div style={styles.participantActions}>
+                            {editingRoles[`${team.id}-${participant.user.id}`] ? (
+                              <div style={styles.roleEditContainer}>
+                                <select
+                                  value={roleValues[`${team.id}-${participant.user.id}`] || participant.role}
+                                  onChange={(e) => handleRoleChange(team.id, participant.user.id, e.target.value)}
+                                  style={styles.select}
+                                >
+                                  <option value="participant">Участник</option>
+                                  <option value="manager">Менеджер</option>
+                                  <option value="admin">Администратор</option>
+                                </select>
+                                <button
+                                  onClick={() => updateParticipantRole(team.id, participant.user.id)}
+                                  style={styles.saveButton}
+                                >
+                                  <Save size={16} />
+                                </button>
+                                <button
+                                  onClick={() => cancelEditingRole(team.id, participant.user.id)}
+                                  style={styles.cancelButton}
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ) : (
                               <button
-                                onClick={() => updateParticipantRole(team.id, participant.id)}
-                                style={styles.saveButton}
+                                onClick={() => startEditingRole(team.id, participant.user.id, participant.role)}
+                                style={styles.editButton}
                               >
-                                <Save size={16} />
+                                <Edit size={16} />
                               </button>
-                              <button
-                                onClick={() => cancelEditingRole(team.id, participant.id)}
-                                style={styles.cancelButton}
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          ) : (
+                            )}
                             <button
-                              onClick={() => startEditingRole(team.id, participant.id, participant.role)}
-                              style={styles.editButton}
+                              onClick={() => removeParticipant(team.id, participant.user.id)}
+                              style={styles.deleteButton}
+                              title="Удалить из команды"
                             >
-                              <Edit size={16} />
+                              <Trash2 size={16} />
                             </button>
-                          )}
-                          <button
-                            onClick={() => removeParticipant(team.id, participant.id)}
-                            style={styles.deleteButton}
-                            title="Удалить из команды"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                
+                <div style={styles.teamFooter}>
+                  <button 
+                    onClick={() => navigate(`/tasks?team=${team.id}`)}
+                    style={styles.tasksButton}
+                  >
+                    <List size={16} style={{ marginRight: "8px" }} />
+                    Задачи
+                  </button>
+                  <div style={{ width: "8px" }}></div>
+                  <button 
+                    onClick={() => navigate(`/meetings?team=${team.id}`)}
+                    style={styles.calendarButton}
+                  >
+                    <Calendar size={16} style={{ marginRight: "8px" }} />
+                    Календарь
+                  </button>
+                </div>
               </div>
-              <div style={styles.teamFooter}>
-                <button 
-                  onClick={() => navigate(`/tasks?team=${team.id}`)}
-                  style={styles.tasksButton}
-                >
-                  <List size={16} style={{ marginRight: "8px" }} />
-                  Просмотр задач
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -374,9 +415,6 @@ const styles = {
     fontSize: "14px",
     fontWeight: "500",
     transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#4338ca",
-    },
   },
   alert: {
     padding: "12px 16px",
@@ -402,8 +440,8 @@ const styles = {
     color: "#64748b",
   },
   teamsContainer: {
-    display: "flex",
-    gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
     gap: "20px",
   },
   teamCard: {
@@ -412,38 +450,14 @@ const styles = {
     padding: "16px",
     backgroundColor: "white",
     boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-  },
-  teamFooter: {
-    marginTop: "auto",
-    paddingTop: "16px",
-    borderTop: "1px solid #f1f5f9",
     display: "flex",
-    justifyContent: "center",
-  },
-  
-  tasksButton: {
-    display: "flex",
-    alignItems: "center",
-    padding: "10px 16px",
-    backgroundColor: "#6366f1",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-    transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#4f46e5",
-    },
+    flexDirection: "column",
   },
   teamHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: "16px",
-    flexWrap: "wrap",
-    gap: "12px",
   },
   teamTitle: {
     fontSize: "18px",
@@ -451,13 +465,23 @@ const styles = {
     margin: 0,
     color: "#1e293b",
   },
+  adminBadge: {
+    backgroundColor: "#dcfce7",
+    color: "#16a34a",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    fontSize: "12px",
+    fontWeight: "500",
+  },
   addParticipantContainer: {
     display: "flex",
     gap: "8px",
     alignItems: "center",
+    marginBottom: "16px",
+    flexWrap: "wrap",
   },
   participantsContainer: {
-    marginTop: "12px",
+    marginBottom: "16px",
   },
   participantsTitle: {
     fontSize: "14px",
@@ -476,9 +500,6 @@ const styles = {
     alignItems: "center",
     padding: "12px 0",
     borderBottom: "1px solid #f1f5f9",
-    ":lastChild": {
-      borderBottom: "none",
-    },
   },
   participantInfo: {
     flex: 1,
@@ -512,10 +533,6 @@ const styles = {
     border: "none",
     borderRadius: "6px",
     cursor: "pointer",
-    transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#c7d2fe",
-    },
   },
   saveButton: {
     display: "flex",
@@ -528,10 +545,6 @@ const styles = {
     border: "none",
     borderRadius: "6px",
     cursor: "pointer",
-    transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#bbf7d0",
-    },
   },
   cancelButton: {
     display: "flex",
@@ -544,10 +557,6 @@ const styles = {
     border: "none",
     borderRadius: "6px",
     cursor: "pointer",
-    transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#fecaca",
-    },
   },
   deleteButton: {
     display: "flex",
@@ -560,10 +569,40 @@ const styles = {
     border: "none",
     borderRadius: "6px",
     cursor: "pointer",
+  },
+  teamFooter: {
+    marginTop: "auto",
+    paddingTop: "16px",
+    borderTop: "1px solid #f1f5f9",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tasksButton: {
+    display: "flex",
+    alignItems: "center",
+    padding: "10px 16px",
+    backgroundColor: "#6366f1",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
     transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#fecaca",
-    },
+  },
+  calendarButton: {
+    display: "flex",
+    alignItems: "center",
+    padding: "10px 16px",
+    backgroundColor: "#10b981",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
+    transition: "background-color 0.2s",
   },
 };
 

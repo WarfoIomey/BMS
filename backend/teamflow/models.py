@@ -3,12 +3,17 @@ from datetime import datetime, timedelta
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
 
 import teamflow.constants as constants
 
 
 User = get_user_model()
+
+
+class TeamRole(models.TextChoices):
+    PARTICIPANT = "participant", "Участник"
+    MANAGER = "manager", "Менеджер"
+    ADMIN = "admin", "Администратор команды"
 
 
 class StatusTask(models.TextChoices):
@@ -27,9 +32,10 @@ class Team(models.Model):
     )
     participants = models.ManyToManyField(
         User,
-        verbose_name='Участники команды',
-        related_name='teams',
-        help_text='Выберите участников для команды',
+        through="Membership",
+        related_name="teams",
+        verbose_name="Участники команды",
+        help_text="Выберите участников для команды",
     )
 
     class Meta:
@@ -39,6 +45,33 @@ class Team(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Membership(models.Model):
+    """Связь пользователь ↔ команда с ролью."""
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="memberships"
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name="memberships"
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=TeamRole.choices,
+        default=TeamRole.PARTICIPANT
+    )
+
+    class Meta:
+        unique_together = ("user", "team")
+        verbose_name = "Участие в команде"
+        verbose_name_plural = "Участия в командах"
+
+    def __str__(self):
+        return f"{self.user.username} в {self.team.title} ({self.role})"
 
 
 class Task(models.Model):
@@ -161,11 +194,18 @@ class Comment(models.Model):
 
 
 class Meeting(models.Model):
-    organizer = models.ForeignKey(
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        verbose_name='Команда',
+        related_name='team_meetings',
+        help_text='Команда у которой встречи',
+    )
+    author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         verbose_name='Организатор встречи ',
-        related_name='organized_meetings',
+        related_name='author_meetings',
         help_text='Пользователь создавший встречу',
     )
     date = models.DateField(

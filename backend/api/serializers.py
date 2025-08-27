@@ -12,13 +12,13 @@ from teamflow.constants import (
 from teamflow.models import (
     Comment,
     Evaluation,
-    Team,
-    Task,
+    Meeting,
+    Membership,
     StatusTask,
-    Meeting
+    Team,
+    TeamRole,
+    Task,
 )
-from users.models import UserRole
-
 
 User = get_user_model()
 
@@ -35,7 +35,6 @@ class UserSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'bio',
-            'role'
         )
         read_only_fields = fields
 
@@ -90,11 +89,19 @@ class PasswordChangeSerializer(serializers.Serializer):
         return value
 
 
-class TeamSerializer(serializers.ModelSerializer):
+class MembershipSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
 
-    participants = UserSerializer(
+    class Meta:
+        model = Membership
+        fields = ('user', 'role')
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    """Сериализатор для работы с командами."""
+    participants = MembershipSerializer(
         many=True,
-        allow_empty=False
+        source='memberships'
     )
 
     class Meta:
@@ -102,12 +109,12 @@ class TeamSerializer(serializers.ModelSerializer):
         fields = (
             'id',
             'title',
-            'participants'
+            'participants',
         )
 
 
 class TeamCreateSerializers(serializers.ModelSerializer):
-
+    """Сериализатор для создания с команды."""
     class Meta:
         model = Team
         fields = (
@@ -117,6 +124,7 @@ class TeamCreateSerializers(serializers.ModelSerializer):
 
 
 class TeamAddParticipantSerializer(serializers.Serializer):
+    """Сериализатор для добавления пользователя в команду."""
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
         write_only=True
@@ -124,6 +132,7 @@ class TeamAddParticipantSerializer(serializers.Serializer):
 
 
 class TeamRemoveParticipantSerializer(serializers.Serializer):
+    """Сериализатор для удаления пользователей из команды."""
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
         write_only=True
@@ -139,10 +148,16 @@ class TaskSerializers(serializers.ModelSerializer):
         source='executor',
         write_only=True
     )
+    team_id = serializers.PrimaryKeyRelatedField(
+        queryset=Team.objects.all(),
+        source='team',
+        write_only=True
+    )
     author = UserSerializer(read_only=True)
     executor = UserSerializer(read_only=True)
     team = TeamSerializer(read_only=True)
     author_rating = serializers.SerializerMethodField()
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -156,26 +171,40 @@ class TaskSerializers(serializers.ModelSerializer):
             'status',
             'executor',
             'team',
-            'author_rating'
+            'team_id',
+            'author_rating',
+            'my_role'
         )
 
-    def create(self, validated_data):
+    def get_my_role(self, obj):
         user = self.context['request'].user
-        team = user.teams.first()
-        if not team:
+        membership = obj.team.memberships.filter(user=user).first()
+        return membership.role if membership else None
+
+    def validate_team_id(self, value):
+        """Проверяем, что пользователь состоит в указанной команде."""
+        user = self.context['request'].user
+        if not user.teams.filter(id=value.id).exists():
             raise serializers.ValidationError(
-                "Пользователь не состоит в команде"
+                "Пользователь не состоит в указанной команде"
             )
-        executor = validated_data.get('executor')
-        if executor and not team.participants.filter(id=executor.id).exists():
+        return value
+
+    def validate(self, data):
+        """Проверяем, что исполнитель состоит в указанной команде."""
+        team = data.get('team')
+        executor = data.get('executor')
+        user = self.context['request'].user
+        if executor and executor == user:
             raise serializers.ValidationError({
-                "executor_id": "Исполнитель не состоит в вашей команде"
+                "executor_id": "Нельзя назначить себя исполнителем задачи"
             })
-        validated_data.update({
-            'author': user,
-            'team': team
-        })
-        return super().create(validated_data)
+        if executor and team:
+            if not team.participants.filter(id=executor.id).exists():
+                raise serializers.ValidationError({
+                    "executor_id": "Исполнитель не состоит в указанной команде"
+                })
+        return data
 
     def get_author_rating(self, obj):
         evaluation = obj.evaluations.filter(evaluator=obj.author).first()
@@ -183,6 +212,7 @@ class TaskSerializers(serializers.ModelSerializer):
 
 
 class TaskStatusUpdateSerializers(serializers.ModelSerializer):
+    """Сериализатор для обновления статуса задачи."""
     class Meta:
         model = Task
         fields = ['status']
@@ -220,6 +250,7 @@ class CommentTaskCreateSerializers(serializers.ModelSerializer):
 
 
 class CommentTaskReadSerializers(serializers.ModelSerializer):
+    """Сериализатор для получения комментариев."""
     author = UserSerializer()
     task = TaskSerializers()
 
@@ -236,6 +267,7 @@ class CommentTaskReadSerializers(serializers.ModelSerializer):
 
 
 class EvaluationCreateSerializers(serializers.ModelSerializer):
+    """Сериализатор для оценки задач."""
     class Meta:
         model = Evaluation
         fields = ('rating',)
@@ -268,6 +300,7 @@ class EvaluationCreateSerializers(serializers.ModelSerializer):
 
 
 class EvaluationReadSerializers(serializers.ModelSerializer):
+    """Сериализатор для получения оценок."""
     evaluator = UserSerializer(read_only=True)
     task = serializers.PrimaryKeyRelatedField(read_only=True)
 
@@ -284,6 +317,7 @@ class EvaluationReadSerializers(serializers.ModelSerializer):
 
 
 class MeetingSerializers(serializers.ModelSerializer):
+    """Сериализатор для работы со встречами."""
 
     participants = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -291,19 +325,21 @@ class MeetingSerializers(serializers.ModelSerializer):
         allow_empty=False,
         required=True
     )
-    organizer = UserSerializer(read_only=True)
+    author = UserSerializer(read_only=True)
+    team = TeamSerializer(read_only=True)
 
     class Meta:
         model = Meeting
         fields = (
             'id',
-            'organizer',
+            'author',
             'date',
             'time',
             'duration',
-            'participants'
+            'participants',
+            'team'
         )
-        read_only_fields = ['organizer']
+        read_only_fields = ['author', 'team']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -312,12 +348,6 @@ class MeetingSerializers(serializers.ModelSerializer):
             self.fields['participants'].queryset = User.objects.filter(
                 teams__in=request.user.teams.all()
             )
-
-    def create(self, validated_date):
-        validated_date.update({
-            'organizer': self.context['request'].user,
-        })
-        return super().create(validated_date)
 
     def validate(self, attrs):
         user = self.context['request'].user
@@ -364,9 +394,10 @@ class MeetingSerializers(serializers.ModelSerializer):
 
 
 class ChangeRoleSerializer(serializers.Serializer):
+    """Сериализатор для изменения ролей команды."""
     user_id = serializers.IntegerField(required=True)
     role = serializers.ChoiceField(
-        choices=[UserRole.MANAGER, UserRole.USER],
+        choices=TeamRole.choices,
         required=True
     )
 
@@ -377,7 +408,8 @@ class ChangeRoleSerializer(serializers.Serializer):
             user = User.objects.get(id=value)
         except User.DoesNotExist:
             raise serializers.ValidationError("Пользователь не найден")
-        if not team.participants.filter(id=value).exists():
+        membership = Membership.objects.filter(user=user, team=team).first()
+        if not membership:
             raise serializers.ValidationError(
                 "Пользователь не состоит в вашей команде"
             )
@@ -392,8 +424,10 @@ class ChangeRoleSerializer(serializers.Serializer):
         Проверка, что у пользователя еще не установлена эта роль.
         """
         user = data['user_id']
+        team = self.context['team']
+        membership = Membership.objects.get(user=user, team=team)
         new_role = data['role']
-        if user.role == new_role:
+        if membership.role == new_role:
             raise serializers.ValidationError(
                 {"role": f"У пользователя уже установлена роль {new_role}"}
             )

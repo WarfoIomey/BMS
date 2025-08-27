@@ -52,7 +52,6 @@ export default function LoginPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Очищаем ошибку при изменении поля
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }

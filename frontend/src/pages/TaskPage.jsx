@@ -10,6 +10,7 @@ const TaskPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
+  const [myRole, setMyRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [draggedTask, setDraggedTask] = useState(null);
@@ -29,7 +30,7 @@ const TaskPage = () => {
     if (node) observer.current.observe(node);
   }, [loading, loadingMore, hasMore]);
 
-  const canCreateTask = ['manager', 'admin_team'].includes(user?.role);
+  const canCreateTask = ['manager', 'admin'].includes(myRole);
   const [filters, setFilters] = useState({
     executor: '',
     author: '',
@@ -63,7 +64,7 @@ const TaskPage = () => {
         if (value) params.append(key, value);
       });
 
-      const res = await axios.get(`http://127.0.0.1:8000/api/tasks/?${params}`, {
+      const res = await axios.get(`/api/tasks/?${params}`, {
         headers: { Authorization: `Token ${token}` },
       });
 
@@ -91,7 +92,7 @@ const TaskPage = () => {
         return;
       }
       await axios.post(
-        `http://127.0.0.1:8000/api/tasks/${taskId}/evaluate/`,
+        `/api/tasks/${taskId}/evaluate/`,
         { rating: rating },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -114,6 +115,9 @@ const TaskPage = () => {
       }
     }
   };
+  const canUpdateStatus = (task) => {
+    return task.author.id === user.id || task.executor?.id === user.id;
+  };
   useEffect(() => {
     if (!teamId) {
       navigate("/teams");
@@ -121,6 +125,14 @@ const TaskPage = () => {
     }
     fetchTasks(false);
   }, [teamId, token, navigate]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    axios.get(`/api/teams/${teamId}/my-role/`, {
+      headers: { Authorization: `Token ${token}` }
+    }).then(res => setMyRole(res.data.role))
+      .catch(err => console.error(err));
+  }, [teamId, token]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -141,10 +153,13 @@ const TaskPage = () => {
   const handleDrop = async (e, newStatus) => {
     e.preventDefault();
     if (!draggedTask || draggedTask.status === newStatus) return;
-
+    if (!canUpdateStatus(draggedTask)) {
+      handleError("Только автор или исполнитель могут изменить статус задачи");
+      return;
+    }
     try {
       await axios.put(
-        `http://127.0.0.1:8000/api/tasks/${draggedTask.id}/update_status/`,
+        `/api/tasks/${draggedTask.id}/update_status/`,
         { status: newStatus },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -162,8 +177,8 @@ const TaskPage = () => {
   const renderRatingStars = (task) => {
   if (task.status !== 'completed') return null;
 
-  const isAuthor = user.id === task.author.id;
-  const canRate = isAuthor && !task.author_rating;
+    const isAuthor = user.id === task.author.id;
+    const canRate = isAuthor && !task.author_rating;
 
   return (
     <div style={styles.ratingContainer} onClick={(e) => e.stopPropagation()}>
@@ -630,7 +645,6 @@ const styles = {
   },
 };
 
-// Добавляем hover-эффекты через CSS-in-JS
 const hoverStyles = {
   createButtonHover: {
     backgroundColor: "#4338ca",

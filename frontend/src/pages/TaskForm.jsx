@@ -22,21 +22,27 @@ const TaskForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isEditing] = useState(!!id);
+  const filteredUsers = users.filter(participant => 
+    participant.user.id !== user.id
+  );
 
   useEffect(() => {
     if (!teamId && !id) { 
-        navigate("/teams");
-        return;
+      navigate("/teams");
+      return;
     }
 
     const fetchData = async () => {
       try {
-        const usersRes = await axios.get(`http://127.0.0.1:8000/api/teams/${teamId}/`, {
-          headers: { Authorization: `Token ${token}` },
-        });
-        setUsers(usersRes.data.participants);
+        if (teamId) {
+          const usersRes = await axios.get(`/api/teams/${teamId}/`, {
+            headers: { Authorization: `Token ${token}` },
+          });
+          setUsers(usersRes.data.participants || []);
+        }
+        
         if (id) {
-          const taskRes = await axios.get(`http://127.0.0.1:8000/api/tasks/${id}/`, {
+          const taskRes = await axios.get(`/api/tasks/${id}/`, {
             headers: { Authorization: `Token ${token}` },
           });
           const task = taskRes.data;
@@ -47,6 +53,12 @@ const TaskForm = () => {
             executor_id: task.executor?.id || "",
             status: task.status
           });
+          if (task.team?.id) {
+            const teamUsersRes = await axios.get(`/api/teams/${task.team.id}/`, {
+              headers: { Authorization: `Token ${token}` },
+            });
+            setUsers(teamUsersRes.data.participants || []);
+          }
         }
       } catch (err) {
         console.error("Ошибка загрузки данных", err);
@@ -69,19 +81,26 @@ const TaskForm = () => {
 
     try {
       const payload = {
-        ...formData,
-        deadline: formData.deadline || null
+        title: formData.title,
+        description: formData.description,
+        deadline: formData.deadline || null,
+        executor_id: formData.executor_id || null,
+        status: formData.status
       };
+
+      if (teamId) {
+        payload.team_id = parseInt(teamId);
+      }
 
       if (isEditing) {
         await axios.put(
-          `http://127.0.0.1:8000/api/tasks/${id}/`,
+          `/api/tasks/${id}/`,
           payload,
           { headers: { Authorization: `Token ${token}` } }
         );
       } else {
         await axios.post(
-          "http://127.0.0.1:8000/api/tasks/",
+          "/api/tasks/",
           payload,
           { headers: { Authorization: `Token ${token}` } }
         );
@@ -93,7 +112,9 @@ const TaskForm = () => {
       const errorData = err.response?.data;
       
       if (errorData) {
-        const errorMessages = Object.values(errorData).flat().join(', ');
+        const errorMessages = Object.entries(errorData)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join('\n');
         setError(errorMessages);
       } else {
         setError("Не удалось сохранить задачу");
@@ -174,9 +195,9 @@ const TaskForm = () => {
                 style={styles.select}
               >
                 <option value="">Не назначен</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.username} ({user.email})
+                {filteredUsers.map((participant) => (
+                  <option key={participant.user.id} value={participant.user.id}>
+                    {participant.user.username} ({participant.user.email})
                   </option>
                 ))}
               </select>
@@ -323,9 +344,6 @@ const styles = {
     fontSize: "14px",
     fontWeight: "500",
     transition: "all 0.2s",
-    ":hover": {
-      backgroundColor: "#f1f5f9",
-    },
   },
   submitButton: {
     display: "flex",
@@ -339,14 +357,23 @@ const styles = {
     fontSize: "14px",
     fontWeight: "500",
     transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#4338ca",
-    },
-    ":disabled": {
-      backgroundColor: "#9ca3af",
-      cursor: "not-allowed",
-    },
   },
 };
+
+Object.assign(styles.cancelButton, {
+  ':hover': {
+    backgroundColor: "#f1f5f9",
+  }
+});
+
+Object.assign(styles.submitButton, {
+  ':hover': {
+    backgroundColor: "#4338ca",
+  },
+  ':disabled': {
+    backgroundColor: "#9ca3af",
+    cursor: "not-allowed",
+  }
+});
 
 export default TaskForm;

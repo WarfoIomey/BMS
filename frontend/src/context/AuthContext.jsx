@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await axios.get("http://127.0.0.1:8000/api/users/me/", {
+      const res = await axios.get("/api/users/me/", {
         headers: { Authorization: `Token ${token}` },
       });
       setUser(res.data);
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/auth/token/login/", {
+      const res = await axios.post("/api/auth/token/login/", {
         email,
         password,
       });
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, username, password) => {
     try {
-      await axios.post("http://127.0.0.1:8000/api/auth/users/", {
+      await axios.post("/api/users/", {
         email,
         username,
         password,

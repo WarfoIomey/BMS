@@ -16,9 +16,7 @@ class UserAdmin(admin.ModelAdmin):
         'first_name',
         'last_name',
         'bio',
-        'role'
     )
-    search_fields = ('username', 'role')
+    search_fields = ('username',)
     list_filter = ('username',)
-    list_editable = ('role',)
     empty_value_display = '-пусто-'

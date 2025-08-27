@@ -5,14 +5,6 @@ from django.db import models
 import users.constants as constants
 
 
-class UserRole(models.TextChoices):
-    """Перечисление ролей пользователей."""
-
-    USER = 'user'
-    MANAGER = 'manager'
-    ADMIN_TEAM = 'admin_team'
-
-
 class User(AbstractUser):
     """Модель пользователя."""
 
@@ -52,12 +44,6 @@ class User(AbstractUser):
         blank=True,
         verbose_name='Биография'
     )
-    role = models.CharField(
-        max_length=constants.ROLE_MAX_LENGTH,
-        verbose_name='Роль',
-        choices=UserRole.choices,
-        default=UserRole.USER
-    )
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
@@ -69,17 +55,3 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-    @property
-    def is_user(self):
-        """Проверка на обычного участника команды."""
-        return self.role == UserRole.USER
-
-    @property
-    def is_admin(self):
-        """Проверка на админастратора команды."""
-        return self.role == UserRole.ADMIN_TEAM or self.is_superuser
-
-    @property
-    def is_manager(self):
-        """Проверка на менеджера команды."""
-        return self.role == UserRole.MANAGER

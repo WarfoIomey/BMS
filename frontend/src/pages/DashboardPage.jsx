@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:8000/api/users/me/", {
+      const response = await axios.get("/api/users/me/", {
         headers: { Authorization: `Token ${token}` },
       });
       setUserData(response.data);
@@ -50,7 +50,7 @@ export default function DashboardPage() {
     e.preventDefault();
     try {
       await axios.put(
-        `http://127.0.0.1:8000/api/users/${currentUser.id}/`,
+        `/api/users/${currentUser.id}/`,
         formData,
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -71,7 +71,7 @@ export default function DashboardPage() {
     
     try {
       await axios.post(
-        "http://127.0.0.1:8000/api/users/set_password/",
+        "/api/users/set_password/",
         { current_password: oldPassword, new_password: newPassword },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -87,7 +87,7 @@ export default function DashboardPage() {
   const handleDeleteAccount = async () => {
     try {
       await axios.delete(
-        `http://127.0.0.1:8000/api/users/${currentUser.id}/`,
+        `/api/users/${currentUser.id}/`,
         { headers: { Authorization: `Token ${token}` } }
       );
       setSuccess("Аккаунт успешно удален!");
@@ -178,7 +178,6 @@ export default function DashboardPage() {
           <p><strong>Имя пользователя:</strong> {userData.username}</p>
           <p><strong>Имя:</strong> {userData.first_name || "Не указано"}</p>
           <p><strong>Фамилия:</strong> {userData.last_name || "Не указана"}</p>
-          <p><strong>Роль:</strong> {userData.role}</p>
           <p><strong>О себе:</strong> {userData.bio || "Не указано"}</p>
           
           <div style={styles.buttonGroup}>

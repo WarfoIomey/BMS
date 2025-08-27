@@ -25,8 +25,8 @@ const TaskDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [myRole, setMyRole] = useState(null);
   
-  // Состояния для комментариев
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [loadingComments, setLoadingComments] = useState(true);
@@ -35,10 +35,22 @@ const TaskDetail = () => {
   useEffect(() => {
     const fetchTask = async () => {
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/tasks/${id}/`, {
+        const response = await axios.get(`/api/tasks/${id}/`, {
           headers: { Authorization: `Token ${token}` },
         });
         setTask(response.data);
+        
+        if (response.data.team?.id) {
+          try {
+            const roleResponse = await axios.get(`/api/teams/${response.data.team.id}/my-role/`, {
+              headers: { Authorization: `Token ${token}` }
+            });
+            setMyRole(roleResponse.data.role);
+          } catch (roleErr) {
+            console.error("Ошибка загрузки роли", roleErr);
+            setMyRole(null);
+          }
+        }
       } catch (err) {
         console.error("Ошибка загрузки задачи", err);
         setError("Не удалось загрузить задачу");
@@ -49,7 +61,7 @@ const TaskDetail = () => {
 
     const fetchComments = async () => {
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/tasks/${id}/comments/`, {
+        const response = await axios.get(`/api/tasks/${id}/comments/`, {
           headers: { Authorization: `Token ${token}` },
         });
         setComments(response.data);
@@ -64,18 +76,19 @@ const TaskDetail = () => {
     fetchComments();
   }, [id, token]);
 
+
   const handleStatusChange = async (newStatus) => {
     if (!task || task.status === newStatus) return;
 
     setIsChangingStatus(true);
+    setError(null);
     try {
-      await axios.put(
-        `http://127.0.0.1:8000/api/tasks/${id}/update_status/`,
+      const response = await axios.put(
+        `/api/tasks/${id}/update_status/`,
         { status: newStatus },
         { headers: { Authorization: `Token ${token}` } }
       );
-      console.log('Ответ от сервера:', response.data); // ← ДОБАВЬТЕ ЭТО
-      console.log('Автор:', response.data.author);
+      console.log('Ответ от сервера:', response.data);
       setTask(prev => ({ ...prev, status: newStatus }));
     } catch (err) {
       console.error("Ошибка изменения статуса", err);
@@ -92,7 +105,7 @@ const TaskDetail = () => {
   setSendingComment(true);
   try {
     const response = await axios.post(
-      `http://127.0.0.1:8000/api/tasks/${id}/comments/`,
+      `/api/tasks/${id}/comments/`,
       { text: newComment },
       { 
         headers: { 
@@ -140,8 +153,7 @@ const TaskDetail = () => {
   };
 
   const canEdit = user?.id === task?.author?.id;
-  const canChangeStatus = user?.role === 'manager' || user?.role === 'admin_team' || user?.id === task?.executor?.id;
-  const canComment = user?.id === task?.author?.id || user?.id === task?.executor?.id || user?.role === 'manager' || user?.role === 'admin_team';
+  const canChangeStatus = ['manager', 'admin'].includes(myRole) || user?.id === task?.executor?.id;
 
   if (loading) return <div style={styles.loading}>Загрузка...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
@@ -212,34 +224,29 @@ const TaskDetail = () => {
             </div>
           )}
 
-          {/* Секция комментариев */}
           <div style={styles.commentsSection}>
             <h3 style={styles.sectionTitle}>
               <MessageCircle size={18} />
               Комментарии ({comments.length})
             </h3>
-
-            {canComment && (
-              <form onSubmit={handleSendComment} style={styles.commentForm}>
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Напишите комментарий..."
-                  style={styles.commentInput}
-                  rows={3}
-                  disabled={sendingComment}
-                />
-                <button 
-                  type="submit" 
-                  style={styles.sendButton}
-                  disabled={!newComment.trim() || sendingComment}
-                >
-                  <Send size={16} />
-                  {sendingComment ? "Отправка..." : "Отправить"}
-                </button>
-              </form>
-            )}
-
+            <form onSubmit={handleSendComment} style={styles.commentForm}>
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Напишите комментарий..."
+                style={styles.commentInput}
+                rows={3}
+                disabled={sendingComment}
+              />
+              <button 
+                type="submit" 
+                style={styles.sendButton}
+                disabled={!newComment.trim() || sendingComment}
+              >
+                <Send size={16} />
+                {sendingComment ? "Отправка..." : "Отправить"}
+              </button>
+            </form>
             {loadingComments ? (
               <div style={styles.loadingComments}>Загрузка комментариев...</div>
             ) : comments.length === 0 ? (

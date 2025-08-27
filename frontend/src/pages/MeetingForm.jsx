@@ -30,17 +30,15 @@ const MeetingForm = () => {
 
     const fetchData = async () => {
       try {
-        // Загружаем участников ТОЛЬКО из своей команды
-        const usersRes = await axios.get(`http://127.0.0.1:8000/api/users/team-users/`, {
+        const usersRes = await axios.get(`/api/users/team-users/`, {
           headers: { Authorization: `Token ${token}` },
         });
         
         const usersData = usersRes.data;
         setAvailableUsers(Array.isArray(usersData) ? usersData : []);
 
-        // Если это редактирование, загружаем данные встречи
         if (id) {
-          const meetingRes = await axios.get(`http://127.0.0.1:8000/api/meetings/${id}/`, {
+          const meetingRes = await axios.get(`/api/meetings/${id}/`, {
             headers: { Authorization: `Token ${token}` },
           });
           const meeting = meetingRes.data;
@@ -88,13 +86,13 @@ const MeetingForm = () => {
     try {
       if (isEditing) {
         await axios.put(
-          `http://127.0.0.1:8000/api/meetings/${id}/`,
+          `/api/meetings/${id}/`,
           formData,
           { headers: { Authorization: `Token ${token}` } }
         );
       } else {
         await axios.post(
-          "http://127.0.0.1:8000/api/meetings/",
+          `/api/meetings/?team=${teamId}`,
           formData,
           { headers: { Authorization: `Token ${token}` } }
         );
@@ -120,7 +118,6 @@ const MeetingForm = () => {
     navigate(`/meetings?team=${teamId}`);
   };
 
-  // Фильтруем текущего пользователя из списка участников (опционально)
   const filteredUsers = availableUsers.filter(teamUser => teamUser.id !== user?.id);
 
   return (

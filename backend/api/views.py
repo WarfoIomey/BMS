@@ -1,32 +1,46 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, QuerySet
+from django.forms import ValidationError
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, NotFound 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import filters
 
+from api.filters import MeetingFilter
 from api.serializers import (
     CommentTaskCreateSerializers,
     CommentTaskReadSerializers,
+    EvaluationCreateSerializers,
+    EvaluationReadSerializers,
     ChangeRoleSerializer,
-    TeamCreateSerializers,
-    UserSerializer,
-    UserRegistrationSerializer,
+    MeetingSerializers,
     PasswordChangeSerializer,
+    TeamCreateSerializers,
     TeamSerializer,
     TeamAddParticipantSerializer,
     TeamRemoveParticipantSerializer,
     TaskSerializers,
     TaskStatusUpdateSerializers,
-    EvaluationCreateSerializers,
-    EvaluationReadSerializers,
-    MeetingSerializers
+    UserSerializer,
+    UserRegistrationSerializer,
 )
-from teamflow.models import Comment, Meeting, Team, Task, Evaluation
-from .permissions import CanEvaluateTask, IsAdmin, IsManagerOrAdmin
+from teamflow.models import (
+    Comment,
+    Evaluation,
+    Membership,
+    Meeting,
+    Team,
+    TeamRole,
+    Task,
+)
+from .permissions import (
+    CanEvaluateTask,
+    IsTeamAdmin,
+    IsManagerOrAdmin
+)
 
 
 User = get_user_model()
@@ -88,13 +102,25 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     queryset = Team.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
-    # serializer_class = TeamSerializer
-    permission_classes = [IsAdmin,]
+    permission_classes = [IsTeamAdmin,]
+
+    def get_queryset(self):
+        """Получение команд, в которых пользовать состоит."""
+        user = self.request.user
+        return Team.objects.filter(participants=user)
 
     def get_serializer_class(self):
         if self.action == 'create':
             return TeamCreateSerializers
         return TeamSerializer
+
+    def perform_create(self, serializer):
+        team = serializer.save()
+        Membership.objects.create(
+            user=self.request.user,
+            team=team,
+            role=TeamRole.ADMIN
+        )
 
     def destroy(self, request, *args, **kwargs):
         return Response(
@@ -116,8 +142,9 @@ class TeamViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user_id']
         new_role = serializer.validated_data['role']
-        user.role = new_role
-        user.save()
+        membership = Membership.objects.get(user=user, team=team)
+        membership.role = new_role
+        membership.save()
         return Response(
             {
                 'message': f'Роль {user.username} изменена на {new_role}',
@@ -138,7 +165,11 @@ class TeamViewSet(viewsets.ModelViewSet):
                 {'error': f'Пользователь {user.username} уже в команде'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        team.participants.add(user)
+        Membership.objects.create(
+            user=user,
+            team=team,
+            role=request.data['role']
+        )
         return Response(
             {'status': f'Пользователь {user.username} добавлен в команду'},
             status=status.HTTP_200_OK
@@ -155,11 +186,18 @@ class TeamViewSet(viewsets.ModelViewSet):
                 {'error': f'Пользователя {user.username} нет в команде'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        team.participants.remove(user)
+        Membership.objects.filter(user=user, team=team).delete()
         return Response(
             {'status': f'Пользователь {user.username} удален из команды'},
             status=status.HTTP_200_OK
         )
+
+    @action(detail=True, methods=['get'], url_path='my-role')
+    def my_role_in_team(self, request, pk=None):
+        membership = request.user.memberships.filter(team_id=pk).first()
+        if membership:
+            return Response({'role': membership.role})
+        return Response({'role': None})
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -173,7 +211,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         filters.SearchFilter,
         filters.OrderingFilter
     ]
-    filterset_fields = ['status', 'executor', 'author']
+    filterset_fields = ['status', 'executor', 'author', 'team']
     search_fields = ['title', 'description']
     ordering_fields = ['created_at', 'deadline', 'priority']
     pagination_class = None
@@ -186,6 +224,9 @@ class TaskViewSet(viewsets.ModelViewSet):
             return TaskStatusUpdateSerializers
         return TaskSerializers
 
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
     def get_queryset(self):
         """Получение задач, только своей команды."""
         user = self.request.user
@@ -197,6 +238,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['put'])
     def update_status(self, request, pk=None):
+        """Обновление статуса у задачи."""
         task = self.get_object()
         serializer = self.get_serializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -210,6 +252,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated, CanEvaluateTask]
     )
     def evaluate_task(self, request, pk=None):
+        """Оценка задачи.."""
         task = self.get_object()
         serializer = EvaluationCreateSerializers(
             data=request.data,
@@ -236,7 +279,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def executor_evaluations(self, request):
-        """Получение всех оценок задач, где пользователь является исполнителем."""
+        """Получение всех оценок задач, где пользователь исполнитель."""
         evaluations = Evaluation.objects.filter(
             task__executor=request.user
         ).select_related('task', 'evaluator', 'task__team')
@@ -255,6 +298,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
+    """Вьюсет для работы с комментариями."""
     permission_classes = [IsAuthenticated]
     pagination_class = None
 
@@ -280,9 +324,44 @@ class MeetingViewSet(viewsets.ModelViewSet):
     serializer_class = MeetingSerializers
     permission_classes = [IsManagerOrAdmin]
     pagination_class = None
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = MeetingFilter
 
     def get_queryset(self):
+        """Доступные встречи для текущего пользователя, с учётом фильтра по команде."""
         user = self.request.user
-        return Meeting.objects.filter(
-            Q(participants=user) | Q(organizer=user)
+        team_id = self.request.query_params.get("team")
+        queryset = Meeting.objects.filter(
+            Q(participants=user) | Q(author=user)
         ).distinct()
+        if team_id:
+            queryset = queryset.filter(
+                Q(author__teams=team_id) |
+                Q(participants__teams=team_id)
+            ).distinct()
+        return queryset.select_related(
+            "author"
+        ).prefetch_related("participants")
+
+    def get_serializer_context(self):
+        """Пробрасываем team в контекст, чтобы сериализатор/perform_create могли использовать."""
+        context = super().get_serializer_context()
+        team_id = self.request.query_params.get("team")
+        if self.action == "create" and not team_id:
+            raise ValidationError({"detail": "Нужно передать параметр ?team=<id> в запросе"})
+        if team_id:
+            try:
+                team = Team.objects.get(id=team_id)
+            except Team.DoesNotExist:
+                raise NotFound("Команда не найдена")
+            if not team.participants.filter(id=self.request.user.id).exists():
+                raise PermissionDenied("Вы не состоите в этой команде")
+            context["team"] = team
+        return context
+
+    def perform_create(self, serializer):
+        """При создании автоматически подставляем организатора и команду."""
+        serializer.save(
+            author=self.request.user,
+            team=self.get_serializer_context()["team"]
+        )
