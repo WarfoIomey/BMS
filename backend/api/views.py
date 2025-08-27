@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, NotFound 
+from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -328,7 +328,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
     filterset_class = MeetingFilter
 
     def get_queryset(self):
-        """Доступные встречи для текущего пользователя, с учётом фильтра по команде."""
+        """Доступные встречи для текущего пользователя."""
         user = self.request.user
         team_id = self.request.query_params.get("team")
         queryset = Meeting.objects.filter(
@@ -344,11 +344,12 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ).prefetch_related("participants")
 
     def get_serializer_context(self):
-        """Пробрасываем team в контекст, чтобы сериализатор/perform_create могли использовать."""
         context = super().get_serializer_context()
         team_id = self.request.query_params.get("team")
         if self.action == "create" and not team_id:
-            raise ValidationError({"detail": "Нужно передать параметр ?team=<id> в запросе"})
+            raise ValidationError({
+                "detail": "Нужно передать параметр ?team=<id> в запросе"
+            })
         if team_id:
             try:
                 team = Team.objects.get(id=team_id)

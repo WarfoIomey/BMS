@@ -19,7 +19,7 @@ comment_urls = [
     path(
         'tasks/<int:task_pk>/comments/',
         CommentViewSet.as_view({
-            'get': 'list', 
+            'get': 'list',
             'post': 'create'
         }),
         name='task-comments'
@@ -27,7 +27,7 @@ comment_urls = [
     path(
         'tasks/<int:task_pk>/comments/<int:pk>/',
         CommentViewSet.as_view({
-            'get': 'retrieve', 
+            'get': 'retrieve',
             'put': 'update',
             'patch': 'partial_update',
             'delete': 'destroy'
