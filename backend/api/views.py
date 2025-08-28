@@ -1,11 +1,15 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, QuerySet
-from django.forms import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, NotFound
+from rest_framework.exceptions import (
+    PermissionDenied,
+    NotFound,
+    ValidationError
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -109,6 +113,16 @@ class TeamViewSet(viewsets.ModelViewSet):
         user = self.request.user
         return Team.objects.filter(participants=user)
 
+    def retrieve(self, request, *args, **kwargs):
+        """Получение конкретной команды с проверкой доступа."""
+        try:
+            return super().retrieve(request, *args, **kwargs)
+        except Http404:
+            return Response(
+                {"detail": "Команда не найдена или у вас нет к ней доступа."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
     def get_serializer_class(self):
         if self.action == 'create':
             return TeamCreateSerializers
@@ -192,7 +206,12 @@ class TeamViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
-    @action(detail=True, methods=['get'], url_path='my-role')
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='my-role',
+        url_name='my-role'
+    )
     def my_role_in_team(self, request, pk=None):
         membership = request.user.memberships.filter(team_id=pk).first()
         if membership:
@@ -300,10 +319,11 @@ class TaskViewSet(viewsets.ModelViewSet):
 class CommentViewSet(viewsets.ModelViewSet):
     """Вьюсет для работы с комментариями."""
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post']
     pagination_class = None
 
     def get_serializer_class(self):
-        if self.request.method in ['POST', 'PUT', 'PATCH']:
+        if self.request.method == 'POST':
             return CommentTaskCreateSerializers
         return CommentTaskReadSerializers
 
@@ -336,8 +356,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ).distinct()
         if team_id:
             queryset = queryset.filter(
-                Q(author__teams=team_id) |
-                Q(participants__teams=team_id)
+                Q(author__teams=team_id) | Q(participants__teams=team_id)
             ).distinct()
         return queryset.select_related(
             "author"

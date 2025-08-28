@@ -28,7 +28,8 @@ class Team(models.Model):
     title = models.CharField(
         max_length=constants.MAX_LENGTH_NAME_TEAME,
         verbose_name='Название команды',
-        help_text='Введите название команды'
+        help_text='Введите название команды',
+        unique=True,
     )
     participants = models.ManyToManyField(
         User,
@@ -140,7 +141,7 @@ class Evaluation(models.Model):
         related_name='evaluations_given',
         verbose_name='Автор оценки'
     )
-    rating = models.IntegerField(
+    rating = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(constants.MIN_RATING),
             MaxValueValidator(constants.MAX_RATING)
