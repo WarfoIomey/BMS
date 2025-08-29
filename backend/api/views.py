@@ -6,8 +6,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import (
-    PermissionDenied,
     NotFound,
+    PermissionDenied,
     ValidationError
 )
 from rest_framework.permissions import IsAuthenticated
@@ -17,9 +17,9 @@ from api.filters import MeetingFilter
 from api.serializers import (
     CommentTaskCreateSerializers,
     CommentTaskReadSerializers,
+    ChangeRoleSerializer,
     EvaluationCreateSerializers,
     EvaluationReadSerializers,
-    ChangeRoleSerializer,
     MeetingSerializers,
     PasswordChangeSerializer,
     TeamCreateSerializers,
