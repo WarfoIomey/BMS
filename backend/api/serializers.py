@@ -39,6 +39,21 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class UserUpdateSerializers(serializers.ModelSerializer):
+    """Сериализатор для изменения пользователя."""
+
+    class Meta:
+        model = User
+        fields = (
+            'id',
+            'email',
+            'username',
+            'first_name',
+            'last_name',
+            'bio',
+        )
+
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Сериализатор для регистрации пользователей."""
 

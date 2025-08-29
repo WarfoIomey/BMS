@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 export default function DashboardPage() {
   const { user: currentUser, token, logout } = useAuth();
   const [userData, setUserData] = useState(null);
+  const [evaluationsData, setEvaluationsData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -16,6 +17,8 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [loadingEvaluations, setLoadingEvaluations] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -38,6 +41,24 @@ export default function DashboardPage() {
       });
     } catch (err) {
       console.error("Ошибка загрузки данных пользователя", err);
+      setError("Не удалось загрузить данные пользователя");
+    }
+  };
+
+  const fetchEvaluationsData = async () => {
+    setLoadingEvaluations(true);
+    try {
+      const response = await axios.get("/api/users/me-evaluations/", {
+        headers: { Authorization: `Token ${token}` },
+      });
+      setEvaluationsData(response.data);
+      setError(null);
+    } catch (err) {
+      console.error("Ошибка загрузки оценок", err);
+      setEvaluationsData({ average_rating: 0, total_evaluations: 0, evaluations: [] });
+      setError("Не удалось загрузить оценки");
+    } finally {
+      setLoadingEvaluations(false);
     }
   };
 
@@ -100,17 +121,87 @@ export default function DashboardPage() {
     }
   };
 
-  if (!userData) return <p>Загрузка...</p>;
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    if (tabName === "evaluations" && !evaluationsData) {
+      fetchEvaluationsData();
+    }
+  };
+
+  if (!userData) return <p style={styles.loading}>Загрузка...</p>;
 
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>Профиль пользователя</h2>
-      {error && <div style={styles.error}>{JSON.stringify(error)}</div>}
+      
+      {/* Навигация по табам */}
+      <div style={styles.tabs}>
+        <button 
+          style={activeTab === "profile" ? styles.activeTab : styles.tab}
+          onClick={() => handleTabChange("profile")}
+        >
+          Профиль
+        </button>
+        <button 
+          style={activeTab === "evaluations" ? styles.activeTab : styles.tab}
+          onClick={() => handleTabChange("evaluations")}
+        >
+          Мои оценки {evaluationsData && `(${evaluationsData.total_evaluations})`}
+        </button>
+      </div>
+
+      {error && (
+        <div style={styles.error}>
+          {typeof error === 'object' ? JSON.stringify(error) : error}
+        </div>
+      )}
       {success && <div style={styles.success}>{success}</div>}
+
+      {activeTab === "profile" ? (
+        <ProfileTab
+          userData={userData}
+          isEditing={isEditing}
+          formData={formData}
+          handleInputChange={handleInputChange}
+          handleSubmit={handleSubmit}
+          setIsEditing={setIsEditing}
+          handlePasswordChange={handlePasswordChange}
+          showDeleteConfirm={showDeleteConfirm}
+          setShowDeleteConfirm={setShowDeleteConfirm}
+          handleDeleteAccount={handleDeleteAccount}
+          logout={logout}
+        />
+      ) : (
+        <EvaluationsTab
+          evaluationsData={evaluationsData}
+          loading={loadingEvaluations}
+          onRefresh={fetchEvaluationsData}
+        />
+      )}
+    </div>
+  );
+}
+
+// Компонент вкладки профиля
+const ProfileTab = ({
+  userData,
+  isEditing,
+  formData,
+  handleInputChange,
+  handleSubmit,
+  setIsEditing,
+  handlePasswordChange,
+  showDeleteConfirm,
+  setShowDeleteConfirm,
+  handleDeleteAccount,
+  logout
+}) => {
+  return (
+    <>
       {isEditing ? (
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.formGroup}>
-            <label>Email:</label>
+            <label style={styles.label}>Email:</label>
             <input
               type="email"
               name="email"
@@ -121,7 +212,7 @@ export default function DashboardPage() {
             />
           </div>
           <div style={styles.formGroup}>
-            <label>Имя пользователя:</label>
+            <label style={styles.label}>Имя пользователя:</label>
             <input
               type="text"
               name="username"
@@ -132,7 +223,7 @@ export default function DashboardPage() {
             />
           </div>
           <div style={styles.formGroup}>
-            <label>Имя:</label>
+            <label style={styles.label}>Имя:</label>
             <input
               type="text"
               name="first_name"
@@ -142,7 +233,7 @@ export default function DashboardPage() {
             />
           </div>
           <div style={styles.formGroup}>
-            <label>Фамилия:</label>
+            <label style={styles.label}>Фамилия:</label>
             <input
               type="text"
               name="last_name"
@@ -152,7 +243,7 @@ export default function DashboardPage() {
             />
           </div>
           <div style={styles.formGroup}>
-            <label>О себе:</label>
+            <label style={styles.label}>О себе:</label>
             <textarea
               name="bio"
               value={formData.bio}
@@ -193,11 +284,12 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      
       <div style={styles.section}>
         <h3 style={styles.subtitle}>Смена пароля</h3>
         <form onSubmit={handlePasswordChange} style={styles.form}>
           <div style={styles.formGroup}>
-            <label>Текущий пароль:</label>
+            <label style={styles.label}>Текущий пароль:</label>
             <input
               type="password"
               name="oldPassword"
@@ -207,7 +299,7 @@ export default function DashboardPage() {
           </div>
           
           <div style={styles.formGroup}>
-            <label>Новый пароль:</label>
+            <label style={styles.label}>Новый пароль:</label>
             <input
               type="password"
               name="newPassword"
@@ -221,6 +313,7 @@ export default function DashboardPage() {
           </button>
         </form>
       </div>
+      
       <div style={styles.section}>
         <h3 style={styles.subtitle}>Удаление аккаунта</h3>
         <p style={styles.warningText}>
@@ -256,9 +349,82 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+    </>
+  );
+};
+
+// Компонент вкладки оценок
+const EvaluationsTab = ({ evaluationsData, loading, onRefresh }) => {
+  if (loading) {
+    return <p style={styles.loading}>Загрузка оценок...</p>;
+  }
+
+  if (!evaluationsData) {
+    return (
+      <div style={styles.evaluationsContainer}>
+        <button onClick={onRefresh} style={styles.refreshButton}>
+          Загрузить оценки
+        </button>
+      </div>
+    );
+  }
+
+  const { average_rating, total_evaluations, evaluations } = evaluationsData;
+
+  return (
+    <div style={styles.evaluationsContainer}>
+      <div style={styles.evaluationsHeader}>
+        <button onClick={onRefresh} style={styles.refreshButton}>
+          Обновить
+        </button>
+      </div>
+
+      <div style={styles.statsContainer}>
+        <div style={styles.statCard}>
+          <h3 style={styles.statNumber}>{average_rating ? average_rating.toFixed(2) : '0.00'}</h3>
+          <p style={styles.statLabel}>Средний рейтинг</p>
+        </div>
+        <div style={styles.statCard}>
+          <h3 style={styles.statNumber}>{total_evaluations}</h3>
+          <p style={styles.statLabel}>Всего оценок</p>
+        </div>
+      </div>
+
+      {evaluations.length === 0 ? (
+        <p style={styles.noData}>Оценки пока отсутствуют</p>
+      ) : (
+        <div style={styles.evaluationsList}>
+          <h3 style={styles.listTitle}>История оценок</h3>
+          {evaluations.map((evaluation) => (
+            <div key={evaluation.id} style={styles.evaluationItem}>
+              <div style={styles.evaluationHeader}>
+                <span style={styles.rating}>
+                  Оценка: <strong>{evaluation.rating}/5</strong>
+                </span>
+                <span style={styles.task}>
+                  Задача: {evaluation.task?.title || "Неизвестная задача"}
+                </span>
+              </div>
+              {evaluation.comment && (
+                <p style={styles.comment}>
+                  <strong>Комментарий:</strong> {evaluation.comment}
+                </p>
+              )}
+              <div style={styles.evaluationFooter}>
+                <span style={styles.evaluator}>
+                  Оценщик: {evaluation.evaluator?.username || "Неизвестный пользователь"}
+                </span>
+                <span style={styles.date}>
+                  {new Date(evaluation.created_at).toLocaleDateString('ru-RU')}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
+};
 
 const styles = {
   container: {
@@ -274,17 +440,37 @@ const styles = {
     color: "#333",
     marginBottom: "30px",
   },
-  subtitle: {
-    color: "#444",
-    margin: "20px 0 15px",
-    paddingBottom: "5px",
-    borderBottom: "1px solid #eee",
+  tabs: {
+    display: "flex",
+    marginBottom: "20px",
+    borderBottom: "1px solid #ddd",
+  },
+  tab: {
+    padding: "10px 20px",
+    backgroundColor: "transparent",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    cursor: "pointer",
+    fontSize: "16px",
+    color: "#666",
+    transition: "all 0.3s ease",
+  },
+  activeTab: {
+    padding: "10px 20px",
+    backgroundColor: "transparent",
+    border: "none",
+    borderBottom: "2px solid #2196F3",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: "#2196F3",
   },
   profileInfo: {
     backgroundColor: "white",
     padding: "20px",
     borderRadius: "5px",
     marginBottom: "20px",
+    lineHeight: "1.6",
   },
   form: {
     backgroundColor: "white",
@@ -299,6 +485,7 @@ const styles = {
     display: "block",
     marginBottom: "5px",
     fontWeight: "bold",
+    color: "#333",
   },
   input: {
     width: "100%",
@@ -306,6 +493,7 @@ const styles = {
     border: "1px solid #ddd",
     borderRadius: "4px",
     fontSize: "16px",
+    boxSizing: "border-box",
   },
   textarea: {
     width: "100%",
@@ -314,11 +502,14 @@ const styles = {
     borderRadius: "4px",
     fontSize: "16px",
     resize: "vertical",
+    minHeight: "100px",
+    boxSizing: "border-box",
   },
   buttonGroup: {
     display: "flex",
     gap: "10px",
     marginTop: "20px",
+    flexWrap: "wrap",
   },
   editButton: {
     padding: "10px 15px",
@@ -327,6 +518,7 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   saveButton: {
     padding: "10px 15px",
@@ -335,6 +527,7 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   cancelButton: {
     padding: "10px 15px",
@@ -343,6 +536,7 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   logoutButton: {
     padding: "10px 15px",
@@ -351,6 +545,7 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   deleteButton: {
     padding: "10px 15px",
@@ -359,6 +554,7 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   confirmDeleteButton: {
     padding: "10px 15px",
@@ -367,26 +563,35 @@ const styles = {
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
+    fontSize: "14px",
   },
   error: {
-    color: "red",
+    color: "#d32f2f",
     backgroundColor: "#ffebee",
     padding: "10px",
     borderRadius: "4px",
     marginBottom: "20px",
+    border: "1px solid #ffcdd2",
   },
   success: {
-    color: "green",
+    color: "#2e7d32",
     backgroundColor: "#e8f5e9",
     padding: "10px",
     borderRadius: "4px",
     marginBottom: "20px",
+    border: "1px solid #c8e6c9",
   },
   section: {
     marginTop: "30px",
     padding: "20px",
     backgroundColor: "white",
     borderRadius: "5px",
+  },
+  subtitle: {
+    color: "#444",
+    margin: "0 0 15px 0",
+    paddingBottom: "10px",
+    borderBottom: "1px solid #eee",
   },
   warningText: {
     color: "#d32f2f",
@@ -402,5 +607,108 @@ const styles = {
   confirmText: {
     color: "#d32f2f",
     marginBottom: "15px",
+  },
+  loading: {
+    textAlign: "center",
+    padding: "40px",
+    color: "#666",
+  },
+  evaluationsContainer: {
+    backgroundColor: "white",
+    padding: "20px",
+    borderRadius: "5px",
+  },
+  evaluationsHeader: {
+    marginBottom: "20px",
+  },
+  refreshButton: {
+    padding: "8px 16px",
+    backgroundColor: "#6c757d",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontSize: "14px",
+  },
+  statsContainer: {
+    display: "flex",
+    gap: "20px",
+    marginBottom: "30px",
+    flexWrap: "wrap",
+  },
+  statCard: {
+    flex: "1",
+    minWidth: "150px",
+    padding: "20px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "8px",
+    textAlign: "center",
+    border: "1px solid #e9ecef",
+  },
+  statNumber: {
+    fontSize: "24px",
+    fontWeight: "bold",
+    margin: "0 0 10px 0",
+    color: "#495057",
+  },
+  statLabel: {
+    margin: 0,
+    color: "#6c757d",
+    fontSize: "14px",
+  },
+  evaluationsList: {
+    marginTop: "20px",
+  },
+  listTitle: {
+    color: "#495057",
+    marginBottom: "15px",
+    paddingBottom: "10px",
+    borderBottom: "1px solid #dee2e6",
+  },
+  evaluationItem: {
+    padding: "15px",
+    marginBottom: "15px",
+    border: "1px solid #dee2e6",
+    borderRadius: "5px",
+    backgroundColor: "#f8f9fa",
+  },
+  evaluationHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: "10px",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
+  rating: {
+    fontWeight: "bold",
+    color: "#28a745",
+    fontSize: "14px",
+  },
+  task: {
+    color: "#495057",
+    fontSize: "14px",
+  },
+  comment: {
+    margin: "10px 0",
+    padding: "10px",
+    backgroundColor: "white",
+    borderRadius: "4px",
+    borderLeft: "3px solid #007bff",
+    fontSize: "14px",
+  },
+  evaluationFooter: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "10px",
+    fontSize: "12px",
+    color: "#6c757d",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
+  noData: {
+    textAlign: "center",
+    color: "#6c757d",
+    padding: "40px",
+    fontStyle: "italic",
   },
 };

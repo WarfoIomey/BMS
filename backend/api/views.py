@@ -30,6 +30,7 @@ from api.serializers import (
     TaskStatusUpdateSerializers,
     UserSerializer,
     UserRegistrationSerializer,
+    UserUpdateSerializers,
 )
 from teamflow.models import (
     Comment,
@@ -60,6 +61,8 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return UserRegistrationSerializer
+        elif self.action in ['update', 'partial_update']:
+            return UserUpdateSerializers
         return UserSerializer
 
     @action(
@@ -99,6 +102,35 @@ class UserViewSet(viewsets.ModelViewSet):
         team_users = team.participants.all()
         serializer = UserSerializer(team_users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='me-evaluations',
+        permission_classes=[IsAuthenticated]
+    )
+    def executor_evaluations(self, request):
+        """Получение всех оценок задач, где пользователь исполнитель."""
+        evaluations = Evaluation.objects.filter(
+            task__executor=request.user
+        ).select_related('task', 'evaluator', 'task__team')
+        stats = evaluations.aggregate(
+            average_rating=Avg('rating'),
+            total_evaluations=Count('id')
+        )
+        average_rating = stats['average_rating']
+        if average_rating is not None:
+            average_rating = round(average_rating, 2)
+        else:
+            average_rating = 0.0
+        serializer = EvaluationReadSerializers(evaluations, many=True)
+        return Response(
+            {
+                'average_rating': average_rating,
+                'total_evaluations': stats['total_evaluations'] or 0,
+                'evaluations': serializer.data
+            }
+        )
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -289,30 +321,6 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(
             EvaluationReadSerializers(evaluation).data,
             status=status.HTTP_201_CREATED
-        )
-
-    @action(
-        detail=False,
-        methods=['get'],
-        url_path='executor-evaluations',
-        permission_classes=[IsAuthenticated]
-    )
-    def executor_evaluations(self, request):
-        """Получение всех оценок задач, где пользователь исполнитель."""
-        evaluations = Evaluation.objects.filter(
-            task__executor=request.user
-        ).select_related('task', 'evaluator', 'task__team')
-        stats = evaluations.aggregate(
-            average_rating=Avg('rating'),
-            total_evaluations=Count('id')
-        )
-        serializer = EvaluationReadSerializers(evaluations, many=True)
-        return Response(
-            {
-                'average_rating': round(stats['average_rating'], 2),
-                'total_evaluations': stats['total_evaluations'],
-                'evaluations': serializer.data
-            }
         )
 
 
