@@ -40,6 +40,7 @@ cd BMS
 │ ├── GET /users/me/ — Данные текущего пользователя
 │ ├── POST /users/set_password/ — Смена пароля
 │ └── GET /users/team-users/ — Пользователи текущей команды
+| └── GET /tasks/executor-evaluations/ — Оценки задач, где пользователь исполнитель
 │
 ├── teams/
 │ ├── GET /teams/ — Список команд текущего пользователя
@@ -57,7 +58,7 @@ cd BMS
 │ ├── PUT/PATCH /tasks/{id}/ — Обновление задачи
 │ ├── PUT /tasks/{id}/update_status/ — Обновление статуса задачи
 │ ├── POST /tasks/{id}/evaluate/ — Оценка задачи
-│ └── GET /tasks/executor-evaluations/ — Оценки задач, где пользователь исполнитель
+│
 │
 ├── tasks/{task_id}/comments/
 │ ├── GET / — Список комментариев к задаче
