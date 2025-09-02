@@ -180,6 +180,7 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['put'], url_path='change-role')
     def change_role(self, request, pk=None):
+        """Эндпоинт для смена роли у участника команды."""
         team = self.get_object()
         serializer = ChangeRoleSerializer(
             data=request.data,
@@ -202,6 +203,7 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['put'], url_path='add-participant')
     def add_participant(self, request, pk=None):
+        """Эндпоинт для добавления участника в команду."""
         team = self.get_object()
         serializer = TeamAddParticipantSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -223,6 +225,7 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'], url_path='remove-participant')
     def remove_participant(self, request, pk=None):
+        """Эндпоинт удаления участника из команды."""
         team = self.get_object()
         serializer = TeamRemoveParticipantSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -245,6 +248,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         url_name='my-role'
     )
     def my_role_in_team(self, request, pk=None):
+        """Эндпоинт для получение роли текущего пользователя."""
         membership = request.user.memberships.filter(team_id=pk).first()
         if membership:
             return Response({'role': membership.role})
