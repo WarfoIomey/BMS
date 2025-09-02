@@ -123,7 +123,7 @@ class UserViewSet(viewsets.ModelViewSet):
             average_rating = round(average_rating, 2)
         else:
             average_rating = 0.0
-        serializer = EvaluationReadSerializers(evaluations, many=True)
+        serializer = EvaluationReadSerializers(evaluations, many=True, context={'request': request})
         return Response(
             {
                 'average_rating': average_rating,
@@ -319,7 +319,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             rating=serializer.validated_data['rating']
         )
         return Response(
-            EvaluationReadSerializers(evaluation).data,
+            EvaluationReadSerializers(evaluation, context={"request": request}).data,
             status=status.HTTP_201_CREATED
         )
 

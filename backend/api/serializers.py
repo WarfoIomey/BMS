@@ -317,7 +317,8 @@ class EvaluationCreateSerializers(serializers.ModelSerializer):
 class EvaluationReadSerializers(serializers.ModelSerializer):
     """Сериализатор для получения оценок."""
     evaluator = UserSerializer(read_only=True)
-    task = serializers.PrimaryKeyRelatedField(read_only=True)
+    # task = serializers.PrimaryKeyRelatedField(read_only=True)
+    task = TaskSerializers(read_only=True)
 
     class Meta:
         model = Evaluation
